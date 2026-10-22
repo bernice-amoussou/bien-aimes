@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, DatabaseZap, LoaderCircle, LogOut, ShieldAlert } from "lucide-react";
+import { ArrowLeft, LoaderCircle, LockKeyhole, LogOut, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { signOutAction } from "@/app/admin/actions";
@@ -21,7 +21,7 @@ function StatePage({ children }: { children: ReactNode }) {
         {children}
         <Link
           href="/"
-          className="mt-10 inline-flex items-center gap-2 self-start text-sm text-ink-muted hover:text-ink"
+          className="mt-10 inline-flex min-h-11 items-center gap-2 self-start text-[15px] text-ink-muted hover:text-ink"
         >
           <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={1.5} />
           {t.login.backToSite}
@@ -44,18 +44,10 @@ export function AdminSetupView() {
   return (
     <StatePage>
       <StateIcon>
-        <DatabaseZap aria-hidden="true" className="size-5" strokeWidth={1.5} />
+        <LockKeyhole aria-hidden="true" className="size-5" strokeWidth={1.5} />
       </StateIcon>
       <h1 className="font-display text-3xl text-ink sm:text-4xl">{t.admin.setup.title}</h1>
-      <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">{t.admin.setup.text}</p>
-      <ol className="mt-6 divide-y divide-line border-y border-line">
-        {t.admin.setup.steps.map((step, index) => (
-          <li key={step} className="grid grid-cols-[2rem_1fr] gap-2 py-3 text-sm text-ink-soft">
-            <span className="font-display text-base text-gold-700 italic tabular-nums">{index + 1}</span>
-            <span>{step}</span>
-          </li>
-        ))}
-      </ol>
+      <p className="mt-4 text-[17px] leading-relaxed text-ink-soft">{t.admin.setup.text}</p>
     </StatePage>
   );
 }
@@ -68,9 +60,9 @@ export function AccessDeniedView({ email }: { email: string }) {
         <ShieldAlert aria-hidden="true" className="size-5" strokeWidth={1.5} />
       </StateIcon>
       <h1 className="font-display text-3xl text-ink sm:text-4xl">{t.admin.denied.title}</h1>
-      <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">{t.admin.denied.text(email)}</p>
+      <p className="mt-4 text-[17px] leading-relaxed text-ink-soft">{t.admin.denied.text(email)}</p>
       <form action={signOutAction} className="mt-8">
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" size="lg">
           <LogOut aria-hidden="true" className="size-4" strokeWidth={1.75} />
           {t.admin.nav.signOut}
         </Button>
@@ -80,9 +72,11 @@ export function AccessDeniedView({ email }: { email: string }) {
 }
 
 export function AdminLoading() {
+  const { t } = useI18n();
   return (
-    <div className="flex min-h-dvh items-center justify-center" role="status" aria-label="…">
-      <LoaderCircle aria-hidden="true" className="size-6 animate-spin text-ink-muted" strokeWidth={1.5} />
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3" role="status">
+      <LoaderCircle aria-hidden="true" className="size-8 animate-spin text-forest-700" strokeWidth={1.75} />
+      <span className="text-[15px] text-ink-muted">{t.common.loading}</span>
     </div>
   );
 }

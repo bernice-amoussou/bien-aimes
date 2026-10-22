@@ -17,58 +17,42 @@ export function CollaboratorsView({ members }: { members: TeamMemberRow[] }) {
     <>
       <AdminPageHeader title={c.title} subtitle={c.subtitle} />
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-line bg-paper-deep/50 text-xs text-ink-muted">
-            <tr>
-              <th scope="col" className="px-5 py-3 font-medium">{c.columns.email}</th>
-              <th scope="col" className="px-5 py-3 font-medium">{c.columns.role}</th>
-              <th scope="col" className="hidden px-5 py-3 font-medium sm:table-cell">{c.columns.since}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {members.map((row) => {
-              const RoleIcon = row.role === "admin" ? ShieldCheck : UserRound;
-              return (
-                <tr key={row.user_id}>
-                  <td className="max-w-0 px-5 py-4">
-                    <p className="truncate text-ink">
-                      {row.email ?? row.user_id}
-                      {row.user_id === me.id && <span className="ml-2 text-xs text-ink-muted">({c.you})</span>}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5 text-ink-soft">
-                      <RoleIcon aria-hidden="true" className="size-3.5 text-gold-700" strokeWidth={1.75} />
-                      {t.admin.roles[row.role]}
-                    </span>
-                  </td>
-                  <td className="hidden px-5 py-4 whitespace-nowrap text-ink-muted sm:table-cell">
-                    {formatDate(row.created_at.slice(0, 10), locale, "short")}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {!isAdmin && <p className="mt-3 text-xs text-ink-muted">{c.memberNotice}</p>}
+      <ul className="space-y-1">
+        {members.map((row) => {
+          const RoleIcon = row.role === "admin" ? ShieldCheck : UserRound;
+          return (
+            <li key={row.user_id} className="-mx-3 flex items-center gap-3 rounded-2xl px-3 py-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-paper-deep text-gold-700">
+                <RoleIcon aria-hidden="true" className="size-5" strokeWidth={1.75} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-medium text-ink">
+                  {row.email ?? row.user_id}
+                  {row.user_id === me.id && <span className="ml-2 text-sm font-normal text-ink-muted">({c.you})</span>}
+                </p>
+                <p className="text-sm text-ink-muted">
+                  {t.admin.roles[row.role]} · {c.since(formatDate(row.created_at.slice(0, 10), locale, "short"))}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {!isAdmin && <p className="mt-3 text-sm text-ink-muted">{c.memberNotice}</p>}
 
-      <section aria-labelledby="roles-title" className="mt-12 grid gap-8 lg:grid-cols-2">
-        <div>
-          <h2 id="roles-title" className="font-display text-2xl text-ink">
-            {c.rolesTitle}
-          </h2>
-          <ul className="mt-4 divide-y divide-line border-y border-line">
-            {c.rolesText.map((line) => (
-              <li key={line} className="py-3 text-sm leading-relaxed text-ink-soft">
-                {line}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <section aria-labelledby="roles-title" className="mt-10">
+        <h2 id="roles-title" className="font-display text-2xl text-ink">
+          {c.rolesTitle}
+        </h2>
+        <ul className="mt-3 space-y-3">
+          {c.rolesText.map((line) => (
+            <li key={line} className="text-[15px] leading-relaxed text-ink-soft">
+              {line}
+            </li>
+          ))}
+        </ul>
         {isAdmin && (
-          <Alert tone="info" className="self-start">
+          <Alert tone="info" className="mt-6">
             {c.howToAdd}
           </Alert>
         )}

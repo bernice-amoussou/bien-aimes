@@ -34,7 +34,7 @@ export function LoginView() {
         <div className="flex items-center justify-between gap-4">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-sm text-sm text-ink-muted hover:text-ink"
+            className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-sm px-1 text-[15px] text-ink-muted hover:text-ink"
           >
             <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={1.5} />
             {t.login.backToSite}

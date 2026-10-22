@@ -37,7 +37,6 @@ export interface SaveSermonInput {
   date: string;
   title: string;
   scriptureReferences: string[];
-  preacher: string;
   notes: string;
   language: SermonLanguage;
   published: boolean;
@@ -56,7 +55,6 @@ function isValidInput(input: SaveSermonInput): boolean {
     title.length <= SERMON_TITLE_MAX &&
     refs.length > 0 &&
     refs.every((r) => r.length <= 120) &&
-    input.preacher.length <= 120 &&
     input.notes.length <= 10_000 &&
     LANGUAGES.includes(input.language) &&
     typeof input.published === "boolean" &&
@@ -97,7 +95,6 @@ export async function saveSermonAction(input: SaveSermonInput): Promise<ActionRe
       preached_on: input.date,
       title: input.title.trim(),
       scripture_references: input.scriptureReferences.map((r) => r.trim()).filter(Boolean),
-      preacher: input.preacher.trim() || null,
       notes: input.notes.trim() || null,
       language: input.language,
       is_published: input.published,

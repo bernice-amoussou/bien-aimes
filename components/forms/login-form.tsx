@@ -6,9 +6,9 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/field";
+import { signInAction } from "@/app/connexion/actions";
 import { useI18n } from "@/lib/i18n/locale-provider";
 import type { Dictionary } from "@/lib/i18n/dictionaries/fr";
-import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type LoginErrors = Partial<
@@ -16,22 +16,11 @@ type LoginErrors = Partial<
 >;
 type AuthError = keyof Dictionary["login"]["authErrors"];
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
 function validate(email: string, password: string): LoginErrors {
   const errors: LoginErrors = {};
   if (!email.trim()) errors.email = "emailRequired";
-  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = "emailInvalid";
   if (!password) errors.password = "passwordRequired";
   return errors;
-}
-
-function mapAuthError(error: { code?: string; status?: number; message: string }): AuthError {
-  if (error.code === "invalid_credentials") return "invalidCredentials";
-  if (error.code === "email_not_confirmed") return "emailNotConfirmed";
-  if (error.status === 429 || error.code === "over_request_rate_limit") return "rateLimited";
-  if (error.status === 0 || /fetch|network/i.test(error.message)) return "network";
-  return "unknown";
 }
 
 /** Destination après connexion : uniquement une page de l'administration. */
@@ -70,12 +59,10 @@ export function LoginForm() {
 
     setPending(true);
     try {
-      const { error } = await getBrowserSupabase().auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (error) {
-        setAuthError(mapAuthError(error));
+      // Identifiant simplifié ou e-mail : résolu et vérifié côté serveur.
+      const result = await signInAction(email.trim(), password);
+      if (!result.ok) {
+        setAuthError(result.error);
         setPending(false);
         passwordRef.current?.select();
         return;
@@ -102,9 +89,11 @@ export function LoginForm() {
         <Input
           ref={emailRef}
           id={`${id}-email`}
-          type="email"
-          inputMode="email"
-          autoComplete="email"
+          type="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="username"
           placeholder={t.login.emailPlaceholder}
           value={email}
           onChange={(e) => {
@@ -142,7 +131,7 @@ export function LoginForm() {
             aria-label={showPassword ? t.login.hidePassword : t.login.showPassword}
             aria-pressed={showPassword}
             aria-controls={`${id}-password`}
-            className="absolute top-1/2 right-1.5 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted hover:bg-paper-deep hover:text-ink"
+            className="absolute top-1/2 right-1 flex size-10 -translate-y-1/2 items-center justify-center rounded-lg text-ink-muted hover:bg-paper-deep hover:text-ink"
           >
             {showPassword ? (
               <EyeOff aria-hidden="true" className="size-4" strokeWidth={1.75} />

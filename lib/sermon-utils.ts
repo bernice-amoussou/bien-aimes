@@ -79,9 +79,7 @@ export function filterSermons(
     if (terms.length === 0) return true;
 
     const haystack = normalizeText(
-      [sermon.title, sermon.preacher ?? "", ...sermon.scriptureReferences].join(
-        " ",
-      ),
+      [sermon.title, ...sermon.scriptureReferences].join(" "),
     );
     return terms.every((term) => haystack.includes(term));
   });
@@ -115,20 +113,4 @@ export function getTotalDuration(sermon: Sermon): number | null {
 
 export function getAvailableLanguages(sermons: Sermon[]): string[] {
   return [...new Set(sermons.map((s) => s.language))].sort();
-}
-
-export function getSermonStats(sermons: Sermon[]) {
-  const audioFiles = sermons.flatMap((s) => s.audioFiles);
-  const knownDurations = audioFiles
-    .map((f) => f.duration)
-    .filter((d): d is number => d !== null);
-  return {
-    sermonCount: sermons.length,
-    audioFileCount: audioFiles.length,
-    totalDuration: knownDurations.reduce((sum, d) => sum + d, 0),
-    filesWithoutDuration: audioFiles.length - knownDurations.length,
-    sermonsWithoutAudio: sermons.filter((s) => s.audioFiles.length === 0).length,
-    publishedCount: sermons.filter((s) => s.published).length,
-    preacherCount: new Set(sermons.map((s) => s.preacher).filter(Boolean)).size,
-  };
 }

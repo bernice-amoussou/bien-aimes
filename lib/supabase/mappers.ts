@@ -4,7 +4,7 @@ import type { AudioFileRow, SermonRow } from "./database.types";
 
 /** Colonnes demandées à Supabase pour une prédication et ses fichiers. */
 export const SERMON_SELECT = `
-  id, preached_on, title, scripture_references, preacher, notes, language,
+  id, preached_on, title, scripture_references, notes, language,
   is_published, created_by, created_at, updated_at,
   audio_files (
     id, sermon_id, name, storage_path, duration_seconds, format, mime_type,
@@ -53,7 +53,6 @@ export function mapSermonRow(row: SermonWithAudioRow): Sermon {
     date: row.preached_on,
     title: row.title,
     scriptureReferences: row.scripture_references,
-    preacher: row.preacher,
     notes: row.notes,
     language: row.language,
     published: row.is_published,

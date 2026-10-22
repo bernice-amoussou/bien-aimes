@@ -26,6 +26,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#faf8f3",
+  // Barres d’onglets et lecteur fixés en bas : on gère nous-mêmes la zone de l’indicateur d’accueil.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

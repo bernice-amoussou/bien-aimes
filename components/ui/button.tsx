@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "link" | "inverse" | "ghostInverse";
-type Size = "sm" | "md" | "lg";
+type Size = "sm" | "md" | "lg" | "xl";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
@@ -19,9 +19,10 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "h-8 gap-1.5 px-3 text-[13px]",
-  md: "h-10 gap-2 px-4 text-sm",
+  sm: "h-9 gap-1.5 px-3.5 text-sm",
+  md: "h-11 gap-2 px-4 text-[15px]",
   lg: "h-12 gap-2.5 px-6 text-[15px]",
+  xl: "h-14 gap-3 px-7 text-base",
 };
 
 export function buttonStyles({
@@ -30,7 +31,7 @@ export function buttonStyles({
   className,
 }: { variant?: Variant; size?: Size; className?: string } = {}) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap transition-colors",
+    "inline-flex shrink-0 items-center justify-center rounded-xl font-medium whitespace-nowrap transition-colors",
     "disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0",
     VARIANTS[variant],
     SIZES[size],
@@ -78,7 +79,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors",
+        "inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors",
         "hover:bg-paper-deep hover:text-ink disabled:pointer-events-none disabled:opacity-40",
         className,
       )}

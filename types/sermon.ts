@@ -33,7 +33,6 @@ export interface Sermon {
   title: string;
   /** Au moins une référence, ex. "Matthieu 17:20". */
   scriptureReferences: string[];
-  preacher: string | null;
   notes: string | null;
   language: SermonLanguage;
   published: boolean;
@@ -47,7 +46,6 @@ export interface SermonDraft {
   date: string;
   title: string;
   scriptureReferences: string[];
-  preacher: string;
   notes: string;
   language: SermonLanguage;
   published: boolean;

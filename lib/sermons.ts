@@ -1,7 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import { DEMO_SERMONS } from "@/data/demo-sermons";
-import { getBookName, isUuid, sortByDateDesc } from "@/lib/sermon-utils";
+import { getBookName, isUuid } from "@/lib/sermon-utils";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { SERMON_SELECT, mapSermonRow, type SermonWithAudioRow } from "@/lib/supabase/mappers";
 import { createPublicSupabase } from "@/lib/supabase/public";
@@ -12,23 +11,18 @@ import type { Sermon } from "@/types/sermon";
  *
  * - Supabase configuré : lecture avec le rôle `anon` (RLS → publiées seulement),
  *   mise en cache et invalidée par les Server Actions via le tag `sermons`.
- * - Supabase non configuré : données de démonstration (data/demo-sermons.ts).
+ * - Supabase non configuré : aucune prédication (le site affiche une liste vide).
  */
 
 export const SERMONS_CACHE_TAG = "sermons";
 
-/** Vrai tant que Supabase n'est pas configuré : le site affiche les exemples. */
-export function isDemoMode(): boolean {
-  return !isSupabaseConfigured();
-}
-
 export async function getSermons(): Promise<Sermon[]> {
-  if (isDemoMode()) return sortByDateDesc(DEMO_SERMONS);
+  if (!isSupabaseConfigured()) return [];
   return fetchPublishedSermons();
 }
 
 export async function getSermonById(id: string): Promise<Sermon | null> {
-  if (isDemoMode()) return DEMO_SERMONS.find((sermon) => sermon.id === id) ?? null;
+  if (!isSupabaseConfigured()) return null;
   // Un identifiant mal formé provoquerait une erreur PostgreSQL : c'est simplement « introuvable ».
   if (!isUuid(id)) return null;
   return fetchPublishedSermon(id);

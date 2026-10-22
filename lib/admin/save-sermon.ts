@@ -3,7 +3,7 @@
 import { saveSermonAction, type ActionErrorCode, type SaveSermonAudioInput } from "@/app/admin/actions";
 import { createUuid } from "@/lib/sermon-utils";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
-import { AUDIO_BUCKET } from "@/lib/supabase/config";
+import { AUDIO_BUCKET, requireSupabaseEnv } from "@/lib/supabase/config";
 import type { AudioDraft } from "@/types/audio-draft";
 import type { SermonDraft } from "@/types/sermon";
 
@@ -26,12 +26,69 @@ function contentTypeFor(draft: AudioDraft): string {
 }
 
 export type SaveProgress =
-  | { stage: "uploading"; current: number; total: number }
+  | {
+      stage: "uploading";
+      /** Fichier en cours (à partir de 1) et nombre de fichiers à envoyer. */
+      current: number;
+      total: number;
+      /** Octets envoyés et total à envoyer, tous fichiers confondus. */
+      loaded: number;
+      totalBytes: number;
+    }
   | { stage: "saving" };
 
 export type SaveError = ActionErrorCode | "upload" | "uploadTooLarge";
 
 export type SaveResult = { ok: true; id: string } | { ok: false; error: SaveError };
+
+type UploadOutcome = { ok: true } | { ok: false; error: "upload" | "uploadTooLarge" };
+
+/**
+ * Téléversement direct vers Supabase Storage avec suivi de progression.
+ * Même requête que le client supabase-js (POST /storage/v1/object/…), mais via
+ * XMLHttpRequest, seul moyen de connaître l'avancement de l'envoi.
+ * L'autorisation repose sur le jeton de session de l'utilisateur et les règles RLS.
+ */
+function uploadWithProgress(
+  path: string,
+  file: File,
+  contentType: string,
+  accessToken: string,
+  onProgress: (loaded: number) => void,
+): Promise<UploadOutcome> {
+  const { url, key } = requireSupabaseEnv();
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${url}/storage/v1/object/${AUDIO_BUCKET}/${encodedPath}`);
+    xhr.setRequestHeader("authorization", `Bearer ${accessToken}`);
+    xhr.setRequestHeader("apikey", key);
+    xhr.setRequestHeader("content-type", contentType);
+    xhr.setRequestHeader("cache-control", "max-age=31536000");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({ ok: true });
+        return;
+      }
+      // Storage signale un fichier trop gros par un HTTP 413 ou par `statusCode: "413"` dans le corps.
+      let tooLarge = xhr.status === 413;
+      try {
+        tooLarge ||= String((JSON.parse(xhr.responseText) as { statusCode?: unknown }).statusCode) === "413";
+      } catch {
+        // Corps non JSON : on garde le code HTTP.
+      }
+      resolve({ ok: false, error: tooLarge ? "uploadTooLarge" : "upload" });
+    };
+    xhr.onerror = () => resolve({ ok: false, error: "upload" });
+    xhr.onabort = () => resolve({ ok: false, error: "upload" });
+    xhr.send(file);
+  });
+}
 
 /**
  * Enregistre une prédication :
@@ -57,19 +114,35 @@ export async function saveSermon(
     }
   };
 
-  for (const [index, file] of toUpload.entries()) {
-    onProgress({ stage: "uploading", current: index + 1, total: toUpload.length });
-    const path = `sermons/${sermonId}/${createUuid()}.${file.format.toLowerCase()}`;
-    const { error } = await supabase.storage
-      .from(AUDIO_BUCKET)
-      .upload(path, file.file as File, { contentType: contentTypeFor(file), upsert: false, cacheControl: "31536000" });
-    if (error) {
-      await cleanup();
-      const tooLarge = "statusCode" in error && String(error.statusCode) === "413";
-      return { ok: false, error: tooLarge ? "uploadTooLarge" : "upload" };
+  if (toUpload.length > 0) {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return { ok: false, error: "unauthorized" };
+
+    const totalBytes = toUpload.reduce((sum, f) => sum + (f.file?.size ?? 0), 0);
+    let doneBytes = 0;
+
+    for (const [index, file] of toUpload.entries()) {
+      const report = (loaded: number) =>
+        onProgress({
+          stage: "uploading",
+          current: index + 1,
+          total: toUpload.length,
+          loaded: doneBytes + loaded,
+          totalBytes,
+        });
+      report(0);
+      const path = `sermons/${sermonId}/${createUuid()}.${file.format.toLowerCase()}`;
+      const outcome = await uploadWithProgress(path, file.file as File, contentTypeFor(file), accessToken, report);
+      if (!outcome.ok) {
+        await cleanup();
+        return outcome;
+      }
+      doneBytes += file.file?.size ?? 0;
+      report(0);
+      uploadedPaths.push(path);
+      pathByDraft.set(file.id, path);
     }
-    uploadedPaths.push(path);
-    pathByDraft.set(file.id, path);
   }
 
   onProgress({ stage: "saving" });

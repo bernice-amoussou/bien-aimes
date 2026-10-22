@@ -20,7 +20,7 @@ export async function generateMetadata({
   if (!sermon) return { title: "Prédication introuvable" };
   return {
     title: sermon.title,
-    description: `${sermon.scriptureReferences.join(", ")}${sermon.preacher ? ` — ${sermon.preacher}` : ""}`,
+    description: sermon.scriptureReferences.join(", "),
   };
 }
 

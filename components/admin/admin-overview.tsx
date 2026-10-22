@@ -1,120 +1,83 @@
 "use client";
 
-import { ArrowRight, Library, Plus } from "lucide-react";
+import { ArrowRight, ExternalLink, Plus } from "lucide-react";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import { formatDate, formatDuration } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/locale-provider";
-import { getSermonStats } from "@/lib/sermon-utils";
-import { AdminPageHeader } from "./admin-shell";
+import { AdminSermonRow } from "./admin-sermons-table";
 import { useAdmin } from "./admin-store";
-import { StatusBadge } from "./status-badge";
 
 export function AdminOverview() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { sermons } = useAdmin();
-  const stats = getSermonStats(sermons);
+  const drafts = sermons.filter((s) => !s.published);
+  const published = sermons.length - drafts.length;
   const recent = [...sermons]
+    .filter((s) => s.published)
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
     .slice(0, 5);
 
-  const figures = [
-    { label: t.admin.overview.sermons, value: String(stats.sermonCount), hint: t.admin.overview.sermonsHint(stats.publishedCount, stats.sermonCount - stats.publishedCount) },
-    { label: t.admin.overview.audioFiles, value: String(stats.audioFileCount), hint: t.admin.overview.filesHint },
-    {
-      label: t.admin.overview.totalDuration,
-      value: stats.totalDuration > 0 ? formatDuration(stats.totalDuration) : "—",
-      hint: t.admin.overview.durationHint(stats.filesWithoutDuration),
-    },
-    { label: t.admin.overview.withoutAudio, value: String(stats.sermonsWithoutAudio), hint: t.admin.overview.withoutAudioHint },
-  ];
-
   return (
     <>
-      <AdminPageHeader
-        title={t.admin.overview.title}
-        subtitle={t.admin.overview.subtitle}
-        action={
-          <ButtonLink href="/admin/predications/nouvelle">
-            <Plus aria-hidden="true" className="size-4" strokeWidth={1.75} />
-            {t.admin.overview.add}
-          </ButtonLink>
-        }
-      />
+      <h1 className="font-display text-3xl text-ink sm:text-4xl">{t.admin.overview.title}</h1>
+      <p className="mt-1.5 text-[15px] text-ink-muted">{t.admin.overview.summary(published, drafts.length)}</p>
 
-      <dl className="grid grid-cols-2 overflow-hidden rounded-lg border border-line bg-surface lg:grid-cols-4">
-        {figures.map((figure, index) => (
-          <div
-            key={figure.label}
-            className={[
-              "p-5 sm:p-6",
-              index % 2 === 1 ? "border-l border-line" : "",
-              index >= 2 ? "border-t border-line lg:border-t-0" : "",
-              index === 2 ? "lg:border-l" : "",
-            ].join(" ")}
-          >
-            <dt className="text-[13px] text-ink-muted">{figure.label}</dt>
-            <dd className="mt-2 font-display text-4xl leading-none text-ink tabular-nums">{figure.value}</dd>
-            <dd className="mt-3 text-xs text-ink-muted">{figure.hint}</dd>
-          </div>
-        ))}
-      </dl>
+      <ButtonLink href="/admin/predications/nouvelle" size="xl" className="mt-6 w-full sm:w-auto">
+        <Plus aria-hidden="true" className="size-5" strokeWidth={2} />
+        {t.admin.overview.add}
+      </ButtonLink>
 
-      <section aria-labelledby="recent-title" className="mt-12">
-        <div className="mb-4 flex items-baseline justify-between">
+      {sermons.length === 0 && (
+        <p className="mt-6 rounded-3xl bg-paper-deep/60 px-5 py-6 text-[15px] leading-relaxed text-ink-soft">
+          {t.admin.overview.emptyText}
+        </p>
+      )}
+
+      {drafts.length > 0 && (
+        <section aria-labelledby="drafts-title" className="mt-10">
+          <h2 id="drafts-title" className="font-display text-2xl text-ink">
+            {t.admin.overview.drafts}
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">{t.admin.overview.draftsHint}</p>
+          <ul className="mt-2 space-y-1">
+            {drafts.map((sermon) => (
+              <li key={sermon.id}>
+                <AdminSermonRow sermon={sermon} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section aria-labelledby="recent-title" className="mt-10">
           <h2 id="recent-title" className="font-display text-2xl text-ink">
             {t.admin.overview.recent}
           </h2>
+          <ul className="mt-2 space-y-1">
+            {recent.map((sermon) => (
+              <li key={sermon.id}>
+                <AdminSermonRow sermon={sermon} />
+              </li>
+            ))}
+          </ul>
           <Link
             href="/admin/predications"
-            className="inline-flex items-center gap-1.5 text-sm text-forest-700 hover:underline"
+            className="mt-3 inline-flex min-h-11 items-center gap-2 text-[15px] font-medium text-forest-700 hover:underline"
           >
             {t.admin.overview.viewAll}
-            <ArrowRight aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+            <ArrowRight aria-hidden="true" className="size-4" strokeWidth={1.75} />
           </Link>
-        </div>
-        {recent.length === 0 ? (
-          <EmptyState
-            icon={Library}
-            title={t.admin.sermons.empty}
-            className="rounded-lg border bg-surface"
-            action={
-              <ButtonLink href="/admin/predications/nouvelle">
-                <Plus aria-hidden="true" className="size-4" strokeWidth={1.75} />
-                {t.admin.overview.add}
-              </ButtonLink>
-            }
-          />
-        ) : (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
-          {recent.map((sermon) => (
-            <li key={sermon.id} className="flex items-center justify-between gap-4 px-5 py-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/admin/predications/${sermon.id}/modifier`}
-                    className="truncate font-medium text-ink hover:text-forest-700"
-                  >
-                    {sermon.title}
-                  </Link>
-                  {!sermon.published && <StatusBadge published={false} />}
-                </div>
-                <p className="mt-0.5 truncate text-[13px] text-ink-muted">
-                  {sermon.scriptureReferences.join(" · ")}
-                </p>
-              </div>
-              <div className="shrink-0 text-right text-[13px]">
-                <time dateTime={sermon.date} className="block text-ink-soft">
-                  {formatDate(sermon.date, locale, "short")}
-                </time>
-                <span className="text-ink-muted">{t.sermon.recordings(sermon.audioFiles.length)}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-        )}
-      </section>
+        </section>
+      )}
+
+      <Link
+        href="/"
+        className="mt-8 flex min-h-11 items-center gap-2 text-[15px] text-ink-muted hover:text-ink md:hidden"
+      >
+        <ExternalLink aria-hidden="true" className="size-5" strokeWidth={1.75} />
+        {t.admin.nav.viewSite}
+      </Link>
     </>
   );
 }

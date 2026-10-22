@@ -24,8 +24,6 @@ create table if not exists public.sermons (
                        check (char_length(btrim(title)) between 1 and 160),
   scripture_references text[] not null
                        check (cardinality(scripture_references) >= 1),
-  preacher             text
-                       check (preacher is null or char_length(btrim(preacher)) > 0),
   notes                text,
   language             public.sermon_language not null default 'fr',
   is_published         boolean not null default false,
@@ -48,6 +46,10 @@ create table if not exists public.audio_files (
   position         integer not null default 0,
   created_at       timestamptz not null default now()
 );
+
+-- Le champ « prédicateur » a été retiré : supprime la colonne si la table
+-- avait été créée par une version précédente de ce script.
+alter table public.sermons drop column if exists preacher;
 
 create index if not exists sermons_preached_on_idx on public.sermons (preached_on desc);
 create index if not exists sermons_published_idx   on public.sermons (is_published, preached_on desc);
@@ -203,8 +205,8 @@ create policy "team_members_delete_admin" on public.team_members
 -- s'appliquent normalement. Renvoie les chemins Storage des fichiers retirés,
 -- que l'application supprime ensuite du bucket.
 --
--- p_sermon : { id, preached_on, title, scripture_references[], preacher,
---              notes, language, is_published }
+-- p_sermon : { id, preached_on, title, scripture_references[], notes,
+--              language, is_published }
 -- p_audio  : [ { id? (fichier existant), name, storage_path, duration_seconds,
 --                format, mime_type, size_bytes, is_downloadable } ] (dans l'ordre)
 
@@ -241,13 +243,12 @@ begin
     from jsonb_array_elements_text(p_sermon -> 'scripture_references') r;
 
   insert into public.sermons as s
-    (id, preached_on, title, scripture_references, preacher, notes, language, is_published)
+    (id, preached_on, title, scripture_references, notes, language, is_published)
   values (
     v_id,
     (p_sermon ->> 'preached_on')::date,
     btrim(p_sermon ->> 'title'),
     v_refs,
-    nullif(btrim(p_sermon ->> 'preacher'), ''),
     nullif(btrim(p_sermon ->> 'notes'), ''),
     (p_sermon ->> 'language')::public.sermon_language,
     coalesce((p_sermon ->> 'is_published')::boolean, false)
@@ -256,7 +257,6 @@ begin
     preached_on          = excluded.preached_on,
     title                = excluded.title,
     scripture_references = excluded.scripture_references,
-    preacher             = excluded.preacher,
     notes                = excluded.notes,
     language             = excluded.language,
     is_published         = excluded.is_published;

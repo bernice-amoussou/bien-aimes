@@ -6,7 +6,7 @@ Nous passons maintenant à la phase fonctionnelle du projet **Bien-aimés**. L'i
 
 1. Inspecte d'abord le projet existant et identifie les pages et fonctionnalités déjà présentes.
 2. Prépare la connexion à Supabase avec des variables d'environnement dans `.env.local`. Ne mets aucune clé secrète dans le code frontend et ne supprime pas les variables existantes.
-3. Crée le schéma SQL pour les prédications : date, thème, versets bibliques, prédicateur facultatif, notes facultatives, langue et fichiers audio associés.
+3. Crée le schéma SQL pour les prédications : date, thème, versets bibliques, notes facultatives, langue et fichiers audio associés.
 4. Configure les règles de sécurité RLS pour que les visiteurs puissent consulter les prédications publiées, mais que seuls les utilisateurs autorisés puissent les gérer.
 5. Prépare les rôles administrateur et membre de l'équipe. L'inscription publique ne doit pas donner automatiquement des droits d'administration.
 6. Connecte les pages existantes aux données réelles : liste, recherche, détails d'une prédication et lecteur audio.

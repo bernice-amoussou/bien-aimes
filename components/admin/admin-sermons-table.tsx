@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Pencil, Plus, Search, SearchX, Trash2 } from "lucide-react";
+import { ChevronRight, Eye, Plus, Search, SearchX, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -9,23 +9,72 @@ import { Alert } from "@/components/ui/alert";
 import { ButtonLink } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { inputStyles } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
-import { formatDate, formatDuration } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/locale-provider";
-import { EMPTY_FILTERS, filterSermons, getTotalDuration } from "@/lib/sermon-utils";
+import { EMPTY_FILTERS, filterSermons } from "@/lib/sermon-utils";
 import type { Sermon } from "@/types/sermon";
 import { AdminPageHeader } from "./admin-shell";
 import { useAdmin } from "./admin-store";
 import { StatusBadge } from "./status-badge";
 
 const actionClass =
-  "inline-flex size-8 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-paper-deep hover:text-ink";
+  "relative z-10 inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-ink-muted transition-colors";
+
+/** Ligne d'une prédication dans l'administration : toute la ligne ouvre la modification. */
+export function AdminSermonRow({ sermon, onDelete }: { sermon: Sermon; onDelete?: (sermon: Sermon) => void }) {
+  const { t, locale } = useI18n();
+  const fileCount = sermon.audioFiles.length;
+
+  return (
+    <div className="group relative -mx-3 flex items-center gap-2 rounded-2xl px-3 py-3 transition-colors hover:bg-paper-deep/70">
+      <div className="min-w-0 flex-1">
+        <Link
+          href={`/admin/predications/${sermon.id}/modifier`}
+          aria-label={`${t.admin.sermons.edit} — ${sermon.title}`}
+          className="line-clamp-2 font-display text-[1.2rem] leading-snug text-ink after:absolute after:inset-0 after:rounded-2xl after:content-[''] group-hover:text-forest-700"
+        >
+          {sermon.title}
+        </Link>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+          <StatusBadge published={sermon.published} />
+          <time dateTime={sermon.date}>{formatDate(sermon.date, locale, "short")}</time>
+          <span aria-hidden="true">·</span>
+          <span className={fileCount === 0 ? "text-gold-700" : undefined}>
+            {fileCount === 0 ? t.admin.sermons.noAudio : t.sermon.recordings(fileCount)}
+          </span>
+        </p>
+      </div>
+      {sermon.published && (
+        <Link
+          href={`/predications/${sermon.id}`}
+          className={cn(actionClass, "hover:bg-surface hover:text-ink")}
+          aria-label={`${t.admin.sermons.view} — ${sermon.title}`}
+          title={t.admin.sermons.view}
+        >
+          <Eye aria-hidden="true" className="size-5" strokeWidth={1.75} />
+        </Link>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(sermon)}
+          className={cn(actionClass, "hover:bg-danger-50 hover:text-danger-600")}
+          aria-label={`${t.admin.sermons.delete} — ${sermon.title}`}
+          title={t.admin.sermons.delete}
+        >
+          <Trash2 aria-hidden="true" className="size-5" strokeWidth={1.75} />
+        </button>
+      )}
+      <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted/50" strokeWidth={1.75} />
+    </div>
+  );
+}
 
 type Feedback = { tone: "success"; title: string } | { tone: "error"; code: ActionErrorCode };
 
 export function AdminSermonsTable() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const { sermons, isAdmin } = useAdmin();
   const [query, setQuery] = useState("");
@@ -50,163 +99,90 @@ export function AdminSermonsTable() {
     });
   }
 
-  function actions(sermon: Sermon) {
-    return (
-      <div className="flex items-center justify-end gap-0.5">
-        {sermon.published && (
-          <Link
-            href={`/predications/${sermon.id}`}
-            className={actionClass}
-            aria-label={`${t.admin.sermons.view} — ${sermon.title}`}
-            title={t.admin.sermons.view}
-          >
-            <Eye aria-hidden="true" className="size-4" strokeWidth={1.75} />
-          </Link>
-        )}
-        <Link
-          href={`/admin/predications/${sermon.id}/modifier`}
-          className={actionClass}
-          aria-label={`${t.admin.sermons.edit} — ${sermon.title}`}
-          title={t.admin.sermons.edit}
-        >
-          <Pencil aria-hidden="true" className="size-4" strokeWidth={1.75} />
-        </Link>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => {
-              setFeedback(null);
-              setPendingDelete(sermon);
-            }}
-            className={cn(actionClass, "hover:bg-danger-50 hover:text-danger-600")}
-            aria-label={`${t.admin.sermons.delete} — ${sermon.title}`}
-            title={t.admin.sermons.delete}
-          >
-            <Trash2 aria-hidden="true" className="size-4" strokeWidth={1.75} />
-          </button>
-        )}
-      </div>
-    );
-  }
-
   return (
     <>
       <AdminPageHeader
         title={t.admin.sermons.title}
         subtitle={t.admin.sermons.subtitle(sermons.length)}
         action={
-          <ButtonLink href="/admin/predications/nouvelle">
-            <Plus aria-hidden="true" className="size-4" strokeWidth={1.75} />
-            {t.admin.sermons.add}
-          </ButtonLink>
+          <div className="hidden sm:block">
+            <ButtonLink href="/admin/predications/nouvelle" size="lg">
+              <Plus aria-hidden="true" className="size-5" strokeWidth={1.75} />
+              {t.admin.overview.add}
+            </ButtonLink>
+          </div>
         }
       />
 
       <div aria-live="polite">
         {feedback?.tone === "success" && (
-          <Alert tone="success" role="status" className="mb-6">
+          <Alert tone="success" role="status" className="mb-5">
             {t.admin.sermons.deleted(feedback.title)}
           </Alert>
         )}
         {feedback?.tone === "error" && (
-          <Alert tone="error" role="alert" className="mb-6">
+          <Alert tone="error" role="alert" className="mb-5">
             {t.form.saveErrors[feedback.code]}
           </Alert>
         )}
       </div>
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-sm">
+      {sermons.length > 0 && (
+        <div className="relative mb-3">
           <label htmlFor="admin-filter" className="sr-only">
             {t.admin.sermons.search}
           </label>
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted"
+            className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-ink-muted"
             strokeWidth={1.75}
           />
           <input
             id="admin-filter"
             type="search"
+            enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t.admin.sermons.search}
-            className={cn(inputStyles, "h-10 pl-9 text-sm")}
+            className="h-12 w-full rounded-full border border-line-strong bg-surface pr-4 pl-12 text-base text-ink placeholder:text-ink-muted focus:border-forest-500 focus:ring-3 focus:ring-forest-500/15 focus:outline-none"
           />
         </div>
-        {!isAdmin && <p className="text-xs text-ink-muted">{t.admin.sermons.deleteAdminOnly}</p>}
-      </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState
           icon={SearchX}
           title={sermons.length === 0 ? t.admin.overview.empty : t.admin.sermons.empty}
-          className="rounded-lg border bg-surface"
+          action={
+            sermons.length === 0 && (
+              <ButtonLink href="/admin/predications/nouvelle" size="xl">
+                <Plus aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                {t.admin.overview.add}
+              </ButtonLink>
+            )
+          }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
-          {/* Tableau — tablette et ordinateur */}
-          <table className="hidden w-full text-left text-sm md:table">
-            <thead className="border-b border-line bg-paper-deep/50 text-xs text-ink-muted">
-              <tr>
-                <th scope="col" className="px-5 py-3 font-medium">{t.admin.sermons.columns.sermon}</th>
-                <th scope="col" className="px-5 py-3 font-medium">{t.admin.sermons.columns.date}</th>
-                <th scope="col" className="px-5 py-3 font-medium">{t.admin.sermons.statusColumn}</th>
-                <th scope="col" className="px-5 py-3 font-medium">{t.admin.sermons.columns.audio}</th>
-                <th scope="col" className="px-5 py-3 text-right font-medium">
-                  <span className="sr-only">{t.admin.sermons.columns.actions}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map((sermon) => {
-                const duration = getTotalDuration(sermon);
-                return (
-                  <tr key={sermon.id} className="transition-colors hover:bg-paper/60">
-                    <td className="max-w-0 px-5 py-4">
-                      <p className="truncate font-medium text-ink">{sermon.title}</p>
-                      <p className="mt-0.5 truncate text-[13px] text-ink-muted">
-                        {sermon.scriptureReferences.join(" · ")}
-                        {sermon.preacher && ` — ${sermon.preacher}`}
-                      </p>
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-ink-soft">
-                      <time dateTime={sermon.date}>{formatDate(sermon.date, locale, "short")}</time>
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge published={sermon.published} />
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-ink-soft tabular-nums">
-                      {sermon.audioFiles.length}
-                      {duration !== null && <span className="text-ink-muted"> · {formatDuration(duration)}</span>}
-                    </td>
-                    <td className="w-32 px-3 py-4">{actions(sermon)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* Liste — mobile */}
-          <ul className="divide-y divide-line md:hidden">
-            {rows.map((sermon) => (
-              <li key={sermon.id} className="px-4 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium text-ink">{sermon.title}</p>
-                  <StatusBadge published={sermon.published} className="mt-0.5" />
-                </div>
-                <p className="mt-0.5 text-[13px] text-ink-muted">{sermon.scriptureReferences.join(" · ")}</p>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <p className="text-[13px] text-ink-soft">
-                    <time dateTime={sermon.date}>{formatDate(sermon.date, locale, "short")}</time>
-                    <span className="text-ink-muted"> · {t.sermon.recordings(sermon.audioFiles.length)}</span>
-                  </p>
-                  {actions(sermon)}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="space-y-1">
+          {rows.map((sermon) => (
+            <li key={sermon.id}>
+              <AdminSermonRow
+                sermon={sermon}
+                onDelete={
+                  isAdmin
+                    ? (target) => {
+                        setFeedback(null);
+                        setPendingDelete(target);
+                      }
+                    : undefined
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      {!isAdmin && sermons.length > 0 && (
+        <p className="mt-4 text-sm text-ink-muted">{t.admin.sermons.deleteAdminOnly}</p>
       )}
 
       <ConfirmDialog

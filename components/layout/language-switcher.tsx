@@ -14,7 +14,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       role="group"
       aria-label={t.nav.language}
       className={cn(
-        "inline-flex items-center rounded-md border border-line bg-surface p-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full border border-line bg-surface p-0.5 text-[13px] font-medium",
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
             aria-label={t.nav.switchTo(LANGUAGE_NAMES[code])}
             onClick={() => setLocale(code)}
             className={cn(
-              "h-7 min-w-9 rounded-[5px] px-2 uppercase tracking-wide transition-colors",
+              "h-9 min-w-11 rounded-full px-2.5 uppercase tracking-wide transition-colors",
               active ? "bg-forest-700 text-paper" : "text-ink-muted hover:text-ink",
             )}
           >

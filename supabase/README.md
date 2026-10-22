@@ -1,8 +1,7 @@
 # Mise en service de Supabase — Bien-aimés
 
 Ce guide prend environ 15 minutes. Tant que ces étapes ne sont pas faites, le site
-fonctionne en **mode démonstration** : les prédications d'exemple s'affichent et
-l'espace `/admin` explique comment terminer la configuration.
+n'affiche aucune prédication et l'espace `/admin` indique qu'il n'est pas encore activé.
 
 ---
 
@@ -25,7 +24,7 @@ Le script crée :
 
 | Élément | Rôle |
 |---|---|
-| `sermons` | prédications : date, thème, versets, prédicateur, notes, langue, publiée ou non |
+| `sermons` | prédications : date, thème, versets, notes, langue, publiée ou non |
 | `audio_files` | fichiers audio liés à une prédication (plusieurs par prédication) |
 | `team_members` | membres de l'équipe et leur rôle (`admin` ou `member`) |
 | `save_sermon()` | enregistrement d'une prédication et de ses fichiers en une seule transaction |
@@ -96,8 +95,8 @@ NEXT_PUBLIC_AUDIO_MAX_MB=50
 
 ## 7. Vérifier
 
-1. <http://localhost:3000> : la mention « Version de démonstration » a disparu du pied de page,
-   la bibliothèque indique « Aucune prédication publiée pour le moment ».
+1. <http://localhost:3000> : la liste des prédications indique « Aucune prédication pour le moment »
+   (ou affiche vos prédications publiées).
 2. <http://localhost:3000/admin> : redirection vers la connexion.
 3. Connectez-vous avec le compte de l'étape 4 : le tableau de bord affiche votre e-mail et « Administrateur ».
 4. **Nouvelle prédication** : ajoutez un fichier ou enregistrez quelques secondes, cochez

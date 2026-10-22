@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { AboutContent } from "@/components/layout/about-content";
-import { PageIntro } from "@/components/layout/page-intro";
 
 export const metadata: Metadata = {
   title: "À propos",
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AboutPage() {
-  return (
-    <>
-      <PageIntro section="about" />
-      <AboutContent />
-    </>
-  );
+  return <AboutContent />;
 }

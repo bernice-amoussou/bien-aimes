@@ -3,8 +3,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export const inputStyles = cn(
-  "block w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-ink",
-  "placeholder:text-ink-muted/70 transition-colors",
+  "block w-full rounded-xl border border-line-strong bg-surface px-3.5 text-ink",
+  "placeholder:text-ink-muted transition-colors",
   "hover:border-ink-muted/50",
   "focus:border-forest-500 focus:outline-none focus:ring-3 focus:ring-forest-500/15",
   "aria-invalid:border-danger-600 aria-invalid:focus:ring-danger-600/15",
@@ -20,7 +20,7 @@ export function Label({
 }: ComponentProps<"label"> & { required?: boolean; optionalLabel?: string }) {
   return (
     <label
-      className={cn("mb-1.5 flex items-baseline gap-1.5 text-sm font-medium text-ink", className)}
+      className={cn("mb-2 flex items-baseline gap-1.5 text-[15px] font-medium text-ink", className)}
       {...props}
     >
       {children}
@@ -30,19 +30,28 @@ export function Label({
         </span>
       )}
       {optionalLabel && (
-        <span className="text-xs font-normal text-ink-muted">({optionalLabel})</span>
+        <span className="text-sm font-normal text-ink-muted">({optionalLabel})</span>
       )}
     </label>
   );
 }
 
-export function Input({ className, ...props }: ComponentProps<"input">) {
-  return <input className={cn(inputStyles, "h-11", className)} {...props} />;
+export function Input({
+  className,
+  inputSize = "md",
+  ...props
+}: ComponentProps<"input"> & { inputSize?: "md" | "lg" }) {
+  return (
+    <input
+      className={cn(inputStyles, inputSize === "lg" ? "h-14 font-display text-xl" : "h-12 text-base", className)}
+      {...props}
+    />
+  );
 }
 
 export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return (
-    <textarea className={cn(inputStyles, "min-h-28 py-2.5 leading-relaxed", className)} {...props} />
+    <textarea className={cn(inputStyles, "min-h-28 py-2.5 text-base leading-relaxed", className)} {...props} />
   );
 }
 
@@ -50,7 +59,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <div className={cn("relative", className)}>
       <select
-        className={cn(inputStyles, "h-10 cursor-pointer appearance-none pr-9 text-sm")}
+        className={cn(inputStyles, "h-12 cursor-pointer appearance-none pr-10 text-base")}
         {...props}
       />
       <ChevronDown
@@ -64,7 +73,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
 
 export function FieldHint({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <p id={id} className="mt-1.5 text-[13px] text-ink-muted">
+    <p id={id} className="mt-1.5 text-sm text-ink-muted">
       {children}
     </p>
   );
@@ -73,7 +82,7 @@ export function FieldHint({ children, id }: { children: ReactNode; id?: string }
 export function FieldError({ children, id }: { children?: ReactNode; id: string }) {
   if (!children) return null;
   return (
-    <p id={id} className="mt-1.5 flex items-start gap-1.5 text-[13px] text-danger-600">
+    <p id={id} className="mt-1.5 flex items-start gap-1.5 text-sm text-danger-600">
       <CircleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" strokeWidth={2} />
       {children}
     </p>

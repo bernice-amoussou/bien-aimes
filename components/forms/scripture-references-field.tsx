@@ -60,7 +60,7 @@ export function ScriptureReferencesField({ idPrefix, rows, onChange, error, rowE
 
   return (
     <fieldset aria-describedby={`${hintId}${error ? ` ${errorId}` : ""}`}>
-      <legend className="mb-1.5 flex items-baseline gap-1.5 text-sm font-medium text-ink">
+      <legend className="mb-2 flex items-baseline gap-1.5 text-[15px] font-medium text-ink">
         {t.form.references}
         <span aria-hidden="true" className="text-danger-600">
           *
@@ -96,7 +96,6 @@ export function ScriptureReferencesField({ idPrefix, rows, onChange, error, rowE
                   label={t.form.removeReference(index + 1)}
                   onClick={() => removeRow(index)}
                   disabled={rows.length === 1 && !row.value}
-                  className="size-11"
                 >
                   <X aria-hidden="true" className="size-4" strokeWidth={1.75} />
                 </IconButton>
@@ -107,10 +106,10 @@ export function ScriptureReferencesField({ idPrefix, rows, onChange, error, rowE
         })}
       </ul>
       <FieldError id={errorId}>{error}</FieldError>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <FieldHint id={hintId}>{t.form.referencesHint}</FieldHint>
-        <Button variant="ghost" size="sm" onClick={addRow} className="-mr-2">
-          <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+      <FieldHint id={hintId}>{t.form.referencesHint}</FieldHint>
+      <div className="mt-3">
+        <Button variant="secondary" onClick={addRow} className="w-full sm:w-auto">
+          <Plus aria-hidden="true" className="size-4" strokeWidth={1.75} />
           {t.form.addReference}
         </Button>
       </div>

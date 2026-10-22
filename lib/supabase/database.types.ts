@@ -12,7 +12,6 @@ export type SermonRow = {
   preached_on: string;
   title: string;
   scripture_references: string[];
-  preacher: string | null;
   notes: string | null;
   language: SermonLanguageEnum;
   is_published: boolean;
@@ -48,7 +47,6 @@ export type SaveSermonPayload = {
   preached_on: string;
   title: string;
   scripture_references: string[];
-  preacher: string | null;
   notes: string | null;
   language: SermonLanguageEnum;
   is_published: boolean;
@@ -75,7 +73,7 @@ export interface Database {
         Row: SermonRow;
         Insert: Insert<
           SermonRow,
-          "id" | "preacher" | "notes" | "language" | "is_published" | "created_by" | "created_at" | "updated_at"
+          "id" | "notes" | "language" | "is_published" | "created_by" | "created_at" | "updated_at"
         >;
         Update: Partial<SermonRow>;
         Relationships: [];

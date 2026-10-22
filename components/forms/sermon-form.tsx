@@ -1,21 +1,29 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, BookOpen, CircleAlert, LoaderCircle, Mic, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui/alert";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { FieldError, FieldHint, Input, Label, Select, Textarea } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldError, Input, Label, Textarea } from "@/components/ui/field";
 import type { SaveError, SaveProgress, SaveResult } from "@/lib/admin/save-sermon";
 import type { RecorderStatus } from "@/lib/audio/use-audio-recorder";
-import { useI18n } from "@/lib/i18n/locale-provider";
+import { cn } from "@/lib/cn";
+import { formatClock, formatDate, formatFileSize } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n/dictionaries/fr";
+import { useI18n } from "@/lib/i18n/locale-provider";
 import { SERMON_TITLE_MAX, isValidIsoDate } from "@/lib/sermon-utils";
 import type { AudioDraft } from "@/types/audio-draft";
 import type { AudioFile, SermonDraft, SermonLanguage } from "@/types/sermon";
 import { AudioFilesField } from "./audio-files-field";
 import { ScriptureReferencesField, type ReferenceRow } from "./scripture-references-field";
 
-type ErrorKey = Exclude<keyof Dictionary["form"]["errors"], "summary">;
+type ErrorKey = keyof Dictionary["form"]["errors"];
+
+const STEPS = ["details", "references", "audio", "review"] as const;
+type Step = (typeof STEPS)[number];
+const REVIEW = STEPS.length - 1;
 
 interface FormErrors {
   date?: ErrorKey;
@@ -25,54 +33,114 @@ interface FormErrors {
   recording?: ErrorKey;
 }
 
-function validate(
-  values: { date: string; title: string; rows: ReferenceRow[] },
-  recorderBusy: boolean,
-): FormErrors {
+interface Values {
+  date: string;
+  title: string;
+  rows: ReferenceRow[];
+}
+
+function validateStep(step: Step, values: Values, recorderBusy: boolean): FormErrors {
   const errors: FormErrors = { rowErrors: {} };
-  if (!values.date) errors.date = "dateRequired";
-  else if (!isValidIsoDate(values.date)) errors.date = "dateInvalid";
-
-  const title = values.title.trim();
-  if (!title) errors.title = "titleRequired";
-  else if (title.length > SERMON_TITLE_MAX) errors.title = "titleTooLong";
-
-  const filled = values.rows.filter((row) => row.value.trim());
-  if (filled.length === 0) errors.references = "referencesRequired";
-  else {
-    for (const row of values.rows) {
-      if (!row.value.trim()) errors.rowErrors[row.id] = "referenceEmpty";
+  if (step === "details") {
+    if (!values.date) errors.date = "dateRequired";
+    else if (!isValidIsoDate(values.date)) errors.date = "dateInvalid";
+    const title = values.title.trim();
+    if (!title) errors.title = "titleRequired";
+    else if (title.length > SERMON_TITLE_MAX) errors.title = "titleTooLong";
+  }
+  if (step === "references") {
+    const filled = values.rows.filter((row) => row.value.trim());
+    if (filled.length === 0) errors.references = "referencesRequired";
+    else {
+      for (const row of values.rows) {
+        if (!row.value.trim()) errors.rowErrors[row.id] = "referenceEmpty";
+      }
     }
   }
-
-  if (recorderBusy) errors.recording = "recordingInProgress";
+  if (step === "audio" && recorderBusy) errors.recording = "recordingInProgress";
   return errors;
 }
 
-function countErrors(errors: FormErrors) {
+function hasErrors(errors: FormErrors) {
   return (
-    [errors.date, errors.title, errors.references, errors.recording].filter(Boolean).length +
-    Object.keys(errors.rowErrors).length
+    Boolean(errors.date || errors.title || errors.references || errors.recording) ||
+    Object.keys(errors.rowErrors).length > 0
   );
 }
 
-function FormSection({
+/** Date locale au format ISO `YYYY-MM-DD`. */
+function toIsoDate(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function ReviewBlock({
   title,
-  description,
+  editLabel,
+  onEdit,
   children,
 }: {
   title: string;
-  description: string;
+  editLabel: string;
+  onEdit: () => void;
   children: ReactNode;
 }) {
   return (
-    <section className="grid gap-6 border-t border-line py-10 first:border-t-0 first:pt-0 lg:grid-cols-[14rem_1fr] lg:gap-12">
-      <div>
-        <h2 className="font-display text-xl text-ink">{title}</h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{description}</p>
+    <section className="rounded-3xl bg-surface p-5 ring-1 ring-line">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-ink-muted">{title}</h3>
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`${editLabel} : ${title}`}
+          className="-mr-3 inline-flex h-11 items-center rounded-xl px-3 text-[15px] font-medium text-forest-700 transition-colors hover:bg-forest-50"
+        >
+          {editLabel}
+        </button>
       </div>
-      <div className="min-w-0">{children}</div>
+      <div className="mt-1">{children}</div>
     </section>
+  );
+}
+
+function UploadProgress({ progress }: { progress: SaveProgress }) {
+  const { t, locale } = useI18n();
+  const uploading = progress.stage === "uploading" && progress.total > 0;
+  const percent =
+    progress.stage === "uploading" && progress.totalBytes > 0
+      ? Math.min(100, Math.round((progress.loaded / progress.totalBytes) * 100))
+      : 0;
+
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center px-2 py-14 text-center">
+      <LoaderCircle aria-hidden="true" className="size-10 animate-spin text-forest-700" strokeWidth={1.75} />
+      <h2 className="mt-6 font-display text-[1.75rem] leading-tight text-ink">
+        {uploading ? t.form.progress.uploadTitle : t.form.progress.savingTitle}
+      </h2>
+      {uploading && progress.stage === "uploading" && (
+        <div className="mt-6 w-full max-w-sm">
+          <div
+            role="progressbar"
+            aria-label={t.form.progress.uploadTitle}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className="h-3 overflow-hidden rounded-full bg-paper-deep"
+          >
+            <div
+              className="h-full rounded-full bg-forest-700 transition-[width] duration-300"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <p className="mt-3 text-[17px] font-semibold text-ink tabular-nums">{percent} %</p>
+          <p className="mt-1 text-sm text-ink-muted tabular-nums">
+            {progress.total > 1 && `${t.form.progress.file(progress.current, progress.total)} · `}
+            {formatFileSize(progress.loaded, locale)} / {formatFileSize(progress.totalBytes, locale)}
+          </p>
+        </div>
+      )}
+      <p className="mt-6 max-w-xs text-[15px] text-ink-soft">{t.form.progress.keepOpen}</p>
+    </div>
   );
 }
 
@@ -82,6 +150,10 @@ interface SermonFormProps {
   initialFiles?: AudioFile[];
   /** Désactive l'envoi (ex. rafraîchissement des données après un enregistrement). */
   busy?: boolean;
+  /** Où mène « Quitter ». */
+  exitHref: string;
+  /** Contenu affiché sous le récapitulatif (ex. suppression). */
+  reviewFooter?: ReactNode;
   /** Enregistre réellement (téléversement + base). Le formulaire affiche la progression et les erreurs. */
   onSubmit: (
     values: SermonDraft,
@@ -91,20 +163,34 @@ interface SermonFormProps {
 }
 
 /**
- * Formulaire de prédication : validation, import et capture audio,
- * puis enregistrement via `onSubmit` avec progression réelle.
+ * Parcours d'ajout ou de modification d'une prédication, une étape à la fois :
+ * thème et date → références → audio → vérification et publication.
+ * En modification, on arrive directement sur le récapitulatif.
  */
-export function SermonForm({ mode, initial, initialFiles = [], busy = false, onSubmit }: SermonFormProps) {
-  const { t } = useI18n();
+export function SermonForm({
+  mode,
+  initial,
+  initialFiles = [],
+  busy = false,
+  exitHref,
+  reviewFooter,
+  onSubmit,
+}: SermonFormProps) {
+  const { t, locale } = useI18n();
+  const router = useRouter();
   const id = useId();
-  const summaryRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  const [stepIndex, setStepIndex] = useState(mode === "edit" ? REVIEW : 0);
+  const [reachedReview, setReachedReview] = useState(mode === "edit");
+  const [showErrors, setShowErrors] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
 
   const [date, setDate] = useState(initial.date);
   const [title, setTitle] = useState(initial.title);
-  const [preacher, setPreacher] = useState(initial.preacher);
   const [notes, setNotes] = useState(initial.notes);
   const [language, setLanguage] = useState<SermonLanguage>(initial.language);
-  const [published, setPublished] = useState(initial.published);
   const [progress, setProgress] = useState<SaveProgress | null>(null);
   const [submitError, setSubmitError] = useState<SaveError>();
   const [rows, setRows] = useState<ReferenceRow[]>(() =>
@@ -127,9 +213,24 @@ export function SermonForm({ mode, initial, initialFiles = [], busy = false, onS
     })),
   );
   const [recorderStatus, setRecorderStatus] = useState<RecorderStatus>("idle");
-  const [errors, setErrors] = useState<FormErrors | null>(null);
 
-  const recorderBusy = recorderStatus === "recording" || recorderStatus === "paused" || recorderStatus === "requesting";
+  const step = STEPS[stepIndex];
+  const recorderBusy =
+    recorderStatus === "recording" || recorderStatus === "paused" || recorderStatus === "requesting";
+  const values: Values = { date, title, rows };
+  const errors: FormErrors = showErrors ? validateStep(step, values, recorderBusy) : { rowErrors: {} };
+  const submitting = progress !== null || busy;
+
+  const dirty =
+    JSON.stringify([date, title, rows.map((r) => r.value.trim()).filter(Boolean), notes.trim(), language]) !==
+      JSON.stringify([
+        initial.date,
+        initial.title,
+        initial.scriptureReferences.filter(Boolean),
+        initial.notes.trim(),
+        initial.language,
+      ]) ||
+    JSON.stringify(files.map((f) => [f.id, f.name])) !== JSON.stringify(initialFiles.map((f) => [f.id, f.name]));
 
   // Libération des URL blob au démontage (après enregistrement, les fichiers sont dans Storage).
   const filesRef = useRef(files);
@@ -144,32 +245,99 @@ export function SermonForm({ mode, initial, initialFiles = [], busy = false, onS
     };
   }, []);
 
-  // Après une tentative d'envoi, les erreurs suivent la saisie.
-  const shownErrors = errors ? validate({ date, title, rows }, recorderBusy) : null;
-  const errorCount = shownErrors ? countErrors(shownErrors) : 0;
+  // Fermeture de l'onglet avec des changements non enregistrés (ex. un enregistrement micro).
+  useEffect(() => {
+    if (!dirty && !submitting) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, submitting]);
 
   const handleRecorderStatus = useCallback((status: RecorderStatus) => setRecorderStatus(status), []);
 
-  const submitting = progress !== null || busy;
+  const fieldIds = {
+    date: `${id}-date`,
+    title: `${id}-title`,
+    notes: `${id}-notes`,
+    references: `${id}-refs`,
+    audio: `${id}-audio`,
+  };
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submitting) return;
-    const nextErrors = validate({ date, title, rows }, recorderBusy);
-    setErrors(nextErrors);
+  function focusFirstError(stepErrors: FormErrors) {
+    const firstRow = Object.keys(stepErrors.rowErrors)[0];
+    const target = stepErrors.title
+      ? fieldIds.title
+      : stepErrors.date
+        ? fieldIds.date
+        : stepErrors.references
+          ? `${fieldIds.references}-${rows[0]?.id}`
+          : firstRow
+            ? `${fieldIds.references}-${firstRow}`
+            : fieldIds.audio;
+    requestAnimationFrame(() => document.getElementById(target)?.focus());
+  }
+
+  function goTo(index: number) {
+    setShowErrors(false);
     setSubmitError(undefined);
-    if (countErrors(nextErrors) > 0) {
-      requestAnimationFrame(() => summaryRef.current?.focus());
+    setStepIndex(index);
+    if (index === REVIEW) setReachedReview(true);
+    window.scrollTo({ top: 0 });
+    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+  }
+
+  /** Valide l'étape courante avant de la quitter. */
+  function leaveStep(next: number) {
+    const stepErrors = validateStep(step, values, recorderBusy);
+    if (hasErrors(stepErrors)) {
+      setShowErrors(true);
+      focusFirstError(stepErrors);
       return;
     }
+    goTo(next);
+  }
 
-    setProgress({ stage: "uploading", current: 0, total: 0 });
+  const atStart = stepIndex === 0 || (mode === "edit" && stepIndex === REVIEW);
+
+  function requestExit() {
+    if (dirty) setConfirmExit(true);
+    else router.push(exitHref);
+  }
+
+  function handleBack() {
+    if (atStart) {
+      requestExit();
+      return;
+    }
+    // On ne quitte pas l'étape audio pendant une capture : elle serait perdue.
+    if (step === "audio" && recorderBusy) {
+      leaveStep(stepIndex - 1);
+      return;
+    }
+    goTo(stepIndex - 1);
+  }
+
+  async function submit(published: boolean) {
+    if (submitting) return;
+    // Vérification finale de toutes les étapes.
+    for (const [index, name] of STEPS.entries()) {
+      const stepErrors = validateStep(name, values, recorderBusy);
+      if (hasErrors(stepErrors)) {
+        goTo(index);
+        setShowErrors(true);
+        focusFirstError(stepErrors);
+        return;
+      }
+    }
+
+    setSubmitError(undefined);
+    setProgress({ stage: "uploading", current: 0, total: 0, loaded: 0, totalBytes: 0 });
+    window.scrollTo({ top: 0 });
     const result = await onSubmit(
       {
         date,
         title: title.trim(),
         scriptureReferences: rows.map((row) => row.value.trim()).filter(Boolean),
-        preacher: preacher.trim(),
         notes: notes.trim(),
         language,
         published,
@@ -180,194 +348,280 @@ export function SermonForm({ mode, initial, initialFiles = [], busy = false, onS
     setProgress(null);
     if (!result.ok) {
       setSubmitError(result.error);
-      requestAnimationFrame(() => summaryRef.current?.focus());
+      requestAnimationFrame(() => errorRef.current?.focus());
     }
   }
 
-  const fieldIds = {
-    date: `${id}-date`,
-    title: `${id}-title`,
-    preacher: `${id}-preacher`,
-    notes: `${id}-notes`,
-    references: `${id}-refs`,
-  };
+  if (progress) return <UploadProgress progress={progress} />;
 
-  const summaryLinks: { href: string; message: string }[] = [];
-  if (shownErrors?.date) summaryLinks.push({ href: fieldIds.date, message: t.form.errors[shownErrors.date] });
-  if (shownErrors?.title) summaryLinks.push({ href: fieldIds.title, message: t.form.errors[shownErrors.title] });
-  if (shownErrors?.references)
-    summaryLinks.push({ href: `${fieldIds.references}-${rows[0]?.id}`, message: t.form.errors[shownErrors.references] });
-  for (const [rowId, key] of Object.entries(shownErrors?.rowErrors ?? {})) {
-    summaryLinks.push({ href: `${fieldIds.references}-${rowId}`, message: t.form.errors[key] });
-  }
-  if (shownErrors?.recording) summaryLinks.push({ href: `${id}-audio`, message: t.form.errors[shownErrors.recording] });
+  const continueLabel = reachedReview
+    ? t.form.backToReview
+    : step === "audio" && files.length === 0
+      ? t.form.skipAudio
+      : t.form.next;
+  const filledRefs = rows.map((row) => row.value.trim()).filter(Boolean);
+  const editingPublished = mode === "edit" && initial.published;
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
-      {submitError && errorCount === 0 && (
-        <div ref={summaryRef} tabIndex={-1} className="mb-8 focus:outline-none">
-          <Alert tone="error" role="alert" title={t.form.saveErrors.title}>
-            {t.form.saveErrors[submitError]}
-          </Alert>
-        </div>
-      )}
-      {errorCount > 0 && (
-        <div ref={summaryRef} tabIndex={-1} className="mb-8 focus:outline-none">
-          <Alert tone="error" role="alert" title={t.form.errors.summary(errorCount)}>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              {summaryLinks.map((link) => (
-                <li key={`${link.href}-${link.message}`}>
-                  <a href={`#${link.href}`} className="underline underline-offset-2 hover:no-underline">
-                    {link.message}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </Alert>
-        </div>
-      )}
+    <div>
+      {/* En-tête du parcours : retour, quitter, progression */}
+      <div className="flex min-h-11 items-center justify-between gap-2">
+        <Button variant="ghost" onClick={handleBack} className="-ml-4">
+          <ArrowLeft aria-hidden="true" className="size-5" strokeWidth={1.75} />
+          {atStart ? t.form.quit : t.form.previous}
+        </Button>
+        {!atStart && (
+          <Button variant="ghost" onClick={requestExit} className="-mr-4">
+            <X aria-hidden="true" className="size-5" strokeWidth={1.75} />
+            {t.form.quit}
+          </Button>
+        )}
+      </div>
 
-      <FormSection title={t.form.sections.details} description={t.form.sections.detailsHint}>
-        <div className="space-y-6">
-          <div className="grid gap-6 sm:grid-cols-[12rem_1fr]">
+      <div className="mt-3">
+        <h1 className="text-sm font-medium text-ink-muted">
+          {mode === "create" ? t.form.newTitle : t.form.editTitle}
+          <span aria-hidden="true"> · </span>
+          {t.form.stepOf(stepIndex + 1, STEPS.length)}
+        </h1>
+        <div aria-hidden="true" className="mt-2 grid grid-cols-4 gap-1.5">
+          {STEPS.map((name, index) => (
+            <span key={name} className={cn("h-1.5 rounded-full", index <= stepIndex ? "bg-forest-700" : "bg-line")} />
+          ))}
+        </div>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="mt-5 font-display text-[1.9rem] leading-tight text-ink focus:outline-none sm:text-4xl"
+        >
+          {t.form.steps[step]}
+        </h2>
+        <p className="mt-1.5 text-[15px] leading-relaxed text-ink-muted">{t.form.stepHints[step]}</p>
+      </div>
+
+      <div className="mt-6">
+        {step === "details" && (
+          <div className="space-y-6">
             <div>
-              <Label htmlFor={fieldIds.date} required>
-                {t.form.date}
-              </Label>
+              <Label htmlFor={fieldIds.title}>{t.form.title}</Label>
+              <Input
+                id={fieldIds.title}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t.form.titlePlaceholder}
+                maxLength={SERMON_TITLE_MAX + 40}
+                enterKeyHint="next"
+                aria-invalid={errors.title ? true : undefined}
+                aria-describedby={errors.title ? `${fieldIds.title}-error` : undefined}
+                inputSize="lg"
+              />
+              <FieldError id={`${fieldIds.title}-error`}>{errors.title && t.form.errors[errors.title]}</FieldError>
+            </div>
+
+            <div>
+              <Label htmlFor={fieldIds.date}>{t.form.date}</Label>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => setDate(toIsoDate(new Date()))}>
+                  {t.form.today}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const sunday = new Date();
+                    sunday.setDate(sunday.getDate() - sunday.getDay());
+                    setDate(toIsoDate(sunday));
+                  }}
+                >
+                  {t.form.lastSunday}
+                </Button>
+              </div>
               <Input
                 id={fieldIds.date}
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                required
-                aria-invalid={shownErrors?.date ? true : undefined}
-                aria-describedby={shownErrors?.date ? `${fieldIds.date}-error` : undefined}
+                aria-invalid={errors.date ? true : undefined}
+                aria-describedby={errors.date ? `${fieldIds.date}-error` : undefined}
+                className="max-w-xs"
               />
-              <FieldError id={`${fieldIds.date}-error`}>
-                {shownErrors?.date && t.form.errors[shownErrors.date]}
-              </FieldError>
+              <FieldError id={`${fieldIds.date}-error`}>{errors.date && t.form.errors[errors.date]}</FieldError>
             </div>
+          </div>
+        )}
+
+        {step === "references" && (
+          <div className="space-y-8">
+            <ScriptureReferencesField
+              idPrefix={fieldIds.references}
+              rows={rows}
+              onChange={setRows}
+              error={errors.references && t.form.errors[errors.references]}
+              rowErrors={Object.fromEntries(
+                Object.entries(errors.rowErrors).map(([rowId, key]) => [rowId, t.form.errors[key]]),
+              )}
+            />
             <div>
-              <Label htmlFor={fieldIds.preacher} optionalLabel={t.common.optional}>
-                {t.form.preacher}
+              <Label htmlFor={fieldIds.notes} optionalLabel={t.common.optional}>
+                {t.form.notes}
               </Label>
-              <Input
-                id={fieldIds.preacher}
-                value={preacher}
-                onChange={(e) => setPreacher(e.target.value)}
-                placeholder={t.form.preacherPlaceholder}
-                autoComplete="off"
+              <Textarea
+                id={fieldIds.notes}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t.form.notesPlaceholder}
+                rows={5}
               />
             </div>
           </div>
+        )}
 
-          <div>
-            <Label htmlFor={fieldIds.title} required>
-              {t.form.title}
-            </Label>
-            <Input
-              id={fieldIds.title}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t.form.titlePlaceholder}
-              required
-              maxLength={SERMON_TITLE_MAX + 40}
-              aria-invalid={shownErrors?.title ? true : undefined}
-              aria-describedby={shownErrors?.title ? `${fieldIds.title}-error` : undefined}
-              className="font-display text-lg"
-            />
-            <FieldError id={`${fieldIds.title}-error`}>
-              {shownErrors?.title && t.form.errors[shownErrors.title]}
-            </FieldError>
-          </div>
-
-          <ScriptureReferencesField
-            idPrefix={fieldIds.references}
-            rows={rows}
-            onChange={setRows}
-            error={shownErrors?.references && t.form.errors[shownErrors.references]}
-            rowErrors={Object.fromEntries(
-              Object.entries(shownErrors?.rowErrors ?? {}).map(([rowId, key]) => [rowId, t.form.errors[key]]),
+        {step === "audio" && (
+          <div id={fieldIds.audio} tabIndex={-1} className="focus:outline-none">
+            <AudioFilesField files={files} setFiles={setFiles} onRecorderStatusChange={handleRecorderStatus} />
+            {errors.recording && (
+              <Alert tone="error" role="alert" className="mt-4">
+                {t.form.errors[errors.recording]}
+              </Alert>
             )}
-          />
-
-          <div>
-            <Label htmlFor={fieldIds.notes} optionalLabel={t.common.optional}>
-              {t.form.notes}
-            </Label>
-            <Textarea
-              id={fieldIds.notes}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={t.form.notesPlaceholder}
-              rows={5}
-            />
           </div>
-        </div>
-      </FormSection>
+        )}
 
-      <FormSection title={t.form.sections.audio} description={t.form.sections.audioHint}>
-        <div id={`${id}-audio`} tabIndex={-1} className="focus:outline-none">
-          <AudioFilesField files={files} setFiles={setFiles} onRecorderStatusChange={handleRecorderStatus} />
-          {shownErrors?.recording && (
-            <Alert tone="error" className="mt-4">
-              {t.form.errors[shownErrors.recording]}
-            </Alert>
-          )}
-        </div>
-      </FormSection>
+        {step === "review" && (
+          <div className="space-y-3">
+            {submitError && (
+              <div ref={errorRef} tabIndex={-1} className="focus:outline-none">
+                <Alert tone="error" role="alert" title={t.form.saveErrors.title}>
+                  {t.form.saveErrors[submitError]}
+                </Alert>
+              </div>
+            )}
 
-      <FormSection title={t.form.sections.publication} description={t.form.sections.publicationHint}>
-        <div className="grid gap-6 sm:grid-cols-[12rem_1fr] sm:items-start">
-          <div>
-            <Label htmlFor={`${id}-language`}>{t.form.language}</Label>
-            <Select
-              id={`${id}-language`}
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as SermonLanguage)}
-            >
-              <option value="fr">{t.form.languages.fr}</option>
-              <option value="en">{t.form.languages.en}</option>
-            </Select>
+            <ReviewBlock title={t.form.steps.details} editLabel={t.form.edit} onEdit={() => goTo(0)}>
+              <p className="font-display text-[1.4rem] leading-snug text-ink">{title.trim()}</p>
+              {isValidIsoDate(date) && <p className="mt-1 text-[15px] text-ink-soft">{formatDate(date, locale)}</p>}
+            </ReviewBlock>
+
+            <ReviewBlock title={t.form.steps.references} editLabel={t.form.edit} onEdit={() => goTo(1)}>
+              <ul className="flex flex-wrap gap-2 pt-1">
+                {filledRefs.map((reference) => (
+                  <li
+                    key={reference}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-sand-100 px-3 py-1.5 text-[15px] text-ink"
+                  >
+                    <BookOpen aria-hidden="true" className="size-4 text-gold-700" strokeWidth={1.75} />
+                    {reference}
+                  </li>
+                ))}
+              </ul>
+              {notes.trim() && (
+                <p className="mt-3 line-clamp-4 text-[15px] leading-relaxed whitespace-pre-line text-ink-soft">
+                  {notes.trim()}
+                </p>
+              )}
+            </ReviewBlock>
+
+            <ReviewBlock title={t.form.steps.audio} editLabel={t.form.edit} onEdit={() => goTo(2)}>
+              {files.length === 0 ? (
+                <p className="flex items-start gap-2 text-[15px] text-gold-700">
+                  <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
+                  {t.form.reviewNoAudio}
+                </p>
+              ) : (
+                <ul className="space-y-1.5 pt-1">
+                  {files.map((file) => (
+                    <li key={file.id} className="flex items-center gap-2.5 text-[15px] text-ink">
+                      <Mic aria-hidden="true" className="size-4 shrink-0 text-forest-700" strokeWidth={1.75} />
+                      <span className="min-w-0 flex-1 truncate">{file.name.trim() || file.format.toUpperCase()}</span>
+                      {file.duration !== null && (
+                        <span className="shrink-0 text-sm text-ink-muted tabular-nums">
+                          {formatClock(file.duration)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </ReviewBlock>
+
+            <fieldset className="rounded-3xl bg-surface p-5 ring-1 ring-line">
+              <legend className="float-left text-sm font-medium text-ink-muted">{t.form.language}</legend>
+              <div className="clear-left grid grid-cols-2 gap-2 pt-3">
+                {(["fr", "en"] as const).map((code) => (
+                  <label
+                    key={code}
+                    className={cn(
+                      "flex h-12 cursor-pointer items-center justify-center rounded-xl border text-[15px] font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-forest-500",
+                      language === code
+                        ? "border-forest-700 bg-forest-700 text-paper"
+                        : "border-line-strong bg-surface text-ink hover:bg-paper",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name={`${id}-language`}
+                      value={code}
+                      checked={language === code}
+                      onChange={() => setLanguage(code)}
+                      className="sr-only"
+                    />
+                    {t.form.languages[code]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {editingPublished && <p className="px-1 text-sm text-ink-muted">{t.form.currentlyPublished}</p>}
           </div>
-          <div className="sm:pt-7">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={published}
-                onChange={(e) => setPublished(e.target.checked)}
-                aria-describedby={`${id}-published-hint`}
-                className="mt-0.5 size-4 shrink-0 cursor-pointer accent-forest-700"
-              />
-              <span>
-                <span className="block text-sm font-medium text-ink">{t.form.published}</span>
-                <FieldHint id={`${id}-published-hint`}>
-                  {published ? t.form.publishedHint : t.form.draftHint}
-                </FieldHint>
-              </span>
-            </label>
-          </div>
-        </div>
-      </FormSection>
-
-      <div className="sticky bottom-0 -mx-4 flex flex-col-reverse gap-2 border-t border-line bg-paper/95 px-4 py-4 backdrop-blur sm:mx-0 sm:flex-row sm:justify-end sm:px-0">
-        <p aria-live="polite" className="text-sm text-ink-muted sm:mr-auto sm:self-center">
-          {progress?.stage === "uploading" && progress.total > 0 && t.form.uploading(progress.current, progress.total)}
-          {progress?.stage === "saving" && t.form.saving}
-        </p>
-        <ButtonLink
-          href="/admin/predications"
-          variant="secondary"
-          aria-disabled={submitting}
-          className={submitting ? "pointer-events-none opacity-50" : undefined}
-        >
-          {t.form.cancel}
-        </ButtonLink>
-        <Button type="submit" disabled={submitting}>
-          {submitting && <LoaderCircle aria-hidden="true" className="size-4 animate-spin" strokeWidth={1.75} />}
-          {mode === "create" ? t.form.submitNew : t.form.submitEdit}
-        </Button>
+        )}
       </div>
-    </form>
+
+      {/* Actions principales, à portée du pouce */}
+      <div className="sticky bottom-0 z-20 -mx-4 mt-8 border-t border-line bg-paper/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:mx-0 sm:px-0">
+        {step === "review" ? (
+          <>
+            <div className="flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
+              <Button size="xl" onClick={() => submit(true)} disabled={submitting} className="w-full sm:w-auto">
+                {busy && <LoaderCircle aria-hidden="true" className="size-5 animate-spin" strokeWidth={2} />}
+                {editingPublished ? t.form.saveChanges : t.form.publish}
+              </Button>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => submit(false)}
+                disabled={submitting}
+                className="w-full sm:h-14 sm:w-auto"
+              >
+                {editingPublished ? t.form.unpublish : t.form.saveDraft}
+              </Button>
+            </div>
+            <p className="mt-2 text-center text-[13px] text-ink-muted sm:text-left">{t.form.publishHelp}</p>
+          </>
+        ) : (
+          <Button
+            size="xl"
+            onClick={() => leaveStep(reachedReview ? REVIEW : stepIndex + 1)}
+            className="w-full sm:w-auto sm:min-w-56"
+          >
+            {continueLabel}
+          </Button>
+        )}
+      </div>
+
+      {step === "review" && reviewFooter}
+
+      <ConfirmDialog
+        open={confirmExit}
+        title={t.form.quitTitle}
+        confirmLabel={t.form.quitConfirm}
+        cancelLabel={t.form.stay}
+        onConfirm={() => {
+          setConfirmExit(false);
+          router.push(exitHref);
+        }}
+        onCancel={() => setConfirmExit(false)}
+      >
+        {t.form.quitText}
+      </ConfirmDialog>
+    </div>
   );
 }

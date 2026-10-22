@@ -8,7 +8,7 @@ export function StatusBadge({ published, className }: { published: boolean; clas
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[11px] font-medium",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[13px] font-medium",
         published ? "bg-forest-50 text-forest-700" : "bg-sand-200 text-gold-700",
         className,
       )}

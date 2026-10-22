@@ -12,7 +12,7 @@ npm run dev
 
 Ouvrez <http://localhost:3000>.
 
-Sans configuration, le site tourne en **mode démonstration** (prédications d'exemple).
+Sans configuration, le site s'affiche sans aucune prédication.
 Pour brancher la base de données, l'authentification et le stockage audio, suivez
 **[supabase/README.md](./supabase/README.md)**.
 
@@ -37,5 +37,4 @@ lib/sermons.ts        lecture publique des prédications (cache invalidé à cha
 lib/i18n/             traductions FR / EN
 supabase/schema.sql   tables, règles RLS, fonction save_sermon, bucket audio
 proxy.ts              rafraîchissement de session et protection de /admin
-data/                 données de démonstration (utilisées tant que Supabase n'est pas configuré)
 ```
