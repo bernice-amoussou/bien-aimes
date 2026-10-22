@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/*
+ * Bien-aimés — design tokens.
+ * Ivoire, encre presque noire, vert forêt, sable et doré discret.
+ */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+}
+
+@theme {
+  --color-paper: #faf8f3;
+  --color-paper-deep: #f3efe6;
+  --color-surface: #fffefb;
+
+  --color-ink: #1b1a17;
+  --color-ink-soft: #4a463e;
+  --color-ink-muted: #6b665b;
+
+  --color-line: #e5dfd2;
+  --color-line-strong: #d3cbb9;
+
+  --color-forest-50: #eef2ee;
+  --color-forest-100: #dbe5dd;
+  --color-forest-300: #8fae9a;
+  --color-forest-500: #2f5a45;
+  --color-forest-700: #1f3d2f;
+  --color-forest-800: #183126;
+  --color-forest-900: #11241b;
+
+  --color-sand-100: #f4eee2;
+  --color-sand-200: #ebe1cd;
+  --color-sand-300: #dccdb0;
+
+  --color-gold-400: #c4a462;
+  --color-gold-500: #a8843f;
+  --color-gold-700: #7d6129;
+
+  --color-danger-50: #fbefec;
+  --color-danger-600: #a3392a;
+  --color-danger-700: #862d20;
+
+  --shadow-soft: 0 1px 2px rgb(27 26 23 / 0.04), 0 4px 16px -4px rgb(27 26 23 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(27 26 23 / 0.05), 0 16px 40px -12px rgb(27 26 23 / 0.18);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-forest-100);
+    color: var(--color-forest-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-forest-500);
+    outline-offset: 2px;
+  }
+}
+
+@utility font-display {
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+}
+
+@utility eyebrow {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Curseur de lecture : piste fine, progression en vert forêt. */
+@utility range-track {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+
+  &::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to right,
+      var(--range-fill, var(--color-forest-700)) var(--range-progress, 0%),
+      var(--range-rest, var(--color-line-strong)) var(--range-progress, 0%)
+    );
+  }
+  &::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--range-rest, var(--color-line-strong));
+  }
+  &::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--range-fill, var(--color-forest-700));
+  }
+  &::-webkit-slider-thumb {
+    appearance: none;
+    margin-top: -5px;
+    height: 14px;
+    width: 14px;
+    border-radius: 9999px;
+    background: var(--range-thumb, var(--color-forest-700));
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 0 0 1px rgb(27 26 23 / 0.12);
+  }
+  &::-moz-range-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 9999px;
+    background: var(--range-thumb, var(--color-forest-700));
+    border: 2px solid var(--color-surface);
+  }
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
