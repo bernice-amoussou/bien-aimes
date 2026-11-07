@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, CircleAlert, LoaderCircle, Mic, X } from "lucide-react";
+import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -10,7 +10,7 @@ import { FieldError, Input, Label, Textarea } from "@/components/ui/field";
 import type { SaveError, SaveProgress, SaveResult } from "@/lib/admin/save-sermon";
 import type { RecorderStatus } from "@/lib/audio/use-audio-recorder";
 import { cn } from "@/lib/cn";
-import { formatClock, formatDate, formatFileSize } from "@/lib/format";
+import { formatFileSize } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n/dictionaries/fr";
 import { useI18n } from "@/lib/i18n/locale-provider";
 import { SERMON_TITLE_MAX, isValidIsoDate } from "@/lib/sermon-utils";
@@ -20,10 +20,6 @@ import { AudioFilesField } from "./audio-files-field";
 import { ScriptureReferencesField, type ReferenceRow } from "./scripture-references-field";
 
 type ErrorKey = keyof Dictionary["form"]["errors"];
-
-const STEPS = ["details", "references", "audio", "review"] as const;
-type Step = (typeof STEPS)[number];
-const REVIEW = STEPS.length - 1;
 
 interface FormErrors {
   date?: ErrorKey;
@@ -39,25 +35,24 @@ interface Values {
   rows: ReferenceRow[];
 }
 
-function validateStep(step: Step, values: Values, recorderBusy: boolean): FormErrors {
+function validate(values: Values, recorderBusy: boolean): FormErrors {
   const errors: FormErrors = { rowErrors: {} };
-  if (step === "details") {
-    if (!values.date) errors.date = "dateRequired";
-    else if (!isValidIsoDate(values.date)) errors.date = "dateInvalid";
-    const title = values.title.trim();
-    if (!title) errors.title = "titleRequired";
-    else if (title.length > SERMON_TITLE_MAX) errors.title = "titleTooLong";
-  }
-  if (step === "references") {
-    const filled = values.rows.filter((row) => row.value.trim());
-    if (filled.length === 0) errors.references = "referencesRequired";
-    else {
-      for (const row of values.rows) {
-        if (!row.value.trim()) errors.rowErrors[row.id] = "referenceEmpty";
-      }
+  if (!values.date) errors.date = "dateRequired";
+  else if (!isValidIsoDate(values.date)) errors.date = "dateInvalid";
+
+  const title = values.title.trim();
+  if (!title) errors.title = "titleRequired";
+  else if (title.length > SERMON_TITLE_MAX) errors.title = "titleTooLong";
+
+  const filled = values.rows.filter((row) => row.value.trim());
+  if (filled.length === 0) errors.references = "referencesRequired";
+  else {
+    for (const row of values.rows) {
+      if (!row.value.trim()) errors.rowErrors[row.id] = "referenceEmpty";
     }
   }
-  if (step === "audio" && recorderBusy) errors.recording = "recordingInProgress";
+
+  if (recorderBusy) errors.recording = "recordingInProgress";
   return errors;
 }
 
@@ -74,31 +69,12 @@ function toIsoDate(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function ReviewBlock({
-  title,
-  editLabel,
-  onEdit,
-  children,
-}: {
-  title: string;
-  editLabel: string;
-  onEdit: () => void;
-  children: ReactNode;
-}) {
+function FormSection({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
-    <section className="rounded-3xl bg-surface p-5 ring-1 ring-line">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-ink-muted">{title}</h3>
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`${editLabel} : ${title}`}
-          className="-mr-3 inline-flex h-11 items-center rounded-xl px-3 text-[15px] font-medium text-forest-700 transition-colors hover:bg-forest-50"
-        >
-          {editLabel}
-        </button>
-      </div>
-      <div className="mt-1">{children}</div>
+    <section className="rounded-3xl bg-surface p-5 ring-1 ring-line sm:p-6">
+      <h2 className="font-display text-[1.5rem] leading-tight text-ink sm:text-[1.75rem]">{title}</h2>
+      <p className="mt-1 text-[15px] leading-relaxed text-ink-muted">{hint}</p>
+      <div className="mt-5">{children}</div>
     </section>
   );
 }
@@ -152,7 +128,7 @@ interface SermonFormProps {
   busy?: boolean;
   /** Où mène « Quitter ». */
   exitHref: string;
-  /** Contenu affiché sous le récapitulatif (ex. suppression). */
+  /** Contenu affiché sous le formulaire (ex. suppression). */
   reviewFooter?: ReactNode;
   /** Enregistre réellement (téléversement + base). Le formulaire affiche la progression et les erreurs. */
   onSubmit: (
@@ -163,9 +139,8 @@ interface SermonFormProps {
 }
 
 /**
- * Parcours d'ajout ou de modification d'une prédication, une étape à la fois :
- * thème et date → références → audio → vérification et publication.
- * En modification, on arrive directement sur le récapitulatif.
+ * Formulaire d'ajout ou de modification d'une prédication, sur une seule page :
+ * thème et date, références, audio, langue, puis publication ou brouillon.
  */
 export function SermonForm({
   mode,
@@ -176,14 +151,11 @@ export function SermonForm({
   reviewFooter,
   onSubmit,
 }: SermonFormProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const id = useId();
-  const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
-  const [stepIndex, setStepIndex] = useState(mode === "edit" ? REVIEW : 0);
-  const [reachedReview, setReachedReview] = useState(mode === "edit");
   const [showErrors, setShowErrors] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
 
@@ -214,11 +186,11 @@ export function SermonForm({
   );
   const [recorderStatus, setRecorderStatus] = useState<RecorderStatus>("idle");
 
-  const step = STEPS[stepIndex];
   const recorderBusy =
     recorderStatus === "recording" || recorderStatus === "paused" || recorderStatus === "requesting";
   const values: Values = { date, title, rows };
-  const errors: FormErrors = showErrors ? validateStep(step, values, recorderBusy) : { rowErrors: {} };
+  // Après une tentative d'envoi, les erreurs suivent la saisie.
+  const errors: FormErrors = showErrors ? validate(values, recorderBusy) : { rowErrors: {} };
   const submitting = progress !== null || busy;
 
   const dirty =
@@ -263,71 +235,37 @@ export function SermonForm({
     audio: `${id}-audio`,
   };
 
-  function focusFirstError(stepErrors: FormErrors) {
-    const firstRow = Object.keys(stepErrors.rowErrors)[0];
-    const target = stepErrors.title
+  /** Amène le premier champ en erreur à l'écran, dans l'ordre de la page. */
+  function focusFirstError(formErrors: FormErrors) {
+    const firstRow = Object.keys(formErrors.rowErrors)[0];
+    const target = formErrors.title
       ? fieldIds.title
-      : stepErrors.date
+      : formErrors.date
         ? fieldIds.date
-        : stepErrors.references
+        : formErrors.references
           ? `${fieldIds.references}-${rows[0]?.id}`
           : firstRow
             ? `${fieldIds.references}-${firstRow}`
             : fieldIds.audio;
-    requestAnimationFrame(() => document.getElementById(target)?.focus());
+    requestAnimationFrame(() => {
+      const element = document.getElementById(target);
+      element?.scrollIntoView({ block: "center" });
+      element?.focus({ preventScroll: true });
+    });
   }
-
-  function goTo(index: number) {
-    setShowErrors(false);
-    setSubmitError(undefined);
-    setStepIndex(index);
-    if (index === REVIEW) setReachedReview(true);
-    window.scrollTo({ top: 0 });
-    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
-  }
-
-  /** Valide l'étape courante avant de la quitter. */
-  function leaveStep(next: number) {
-    const stepErrors = validateStep(step, values, recorderBusy);
-    if (hasErrors(stepErrors)) {
-      setShowErrors(true);
-      focusFirstError(stepErrors);
-      return;
-    }
-    goTo(next);
-  }
-
-  const atStart = stepIndex === 0 || (mode === "edit" && stepIndex === REVIEW);
 
   function requestExit() {
     if (dirty) setConfirmExit(true);
     else router.push(exitHref);
   }
 
-  function handleBack() {
-    if (atStart) {
-      requestExit();
-      return;
-    }
-    // On ne quitte pas l'étape audio pendant une capture : elle serait perdue.
-    if (step === "audio" && recorderBusy) {
-      leaveStep(stepIndex - 1);
-      return;
-    }
-    goTo(stepIndex - 1);
-  }
-
   async function submit(published: boolean) {
     if (submitting) return;
-    // Vérification finale de toutes les étapes.
-    for (const [index, name] of STEPS.entries()) {
-      const stepErrors = validateStep(name, values, recorderBusy);
-      if (hasErrors(stepErrors)) {
-        goTo(index);
-        setShowErrors(true);
-        focusFirstError(stepErrors);
-        return;
-      }
+    const formErrors = validate(values, recorderBusy);
+    if (hasErrors(formErrors)) {
+      setShowErrors(true);
+      focusFirstError(formErrors);
+      return;
     }
 
     setSubmitError(undefined);
@@ -348,59 +286,42 @@ export function SermonForm({
     setProgress(null);
     if (!result.ok) {
       setSubmitError(result.error);
-      requestAnimationFrame(() => errorRef.current?.focus());
+      requestAnimationFrame(() => {
+        errorRef.current?.scrollIntoView({ block: "center" });
+        errorRef.current?.focus({ preventScroll: true });
+      });
     }
   }
 
   if (progress) return <UploadProgress progress={progress} />;
 
-  const continueLabel = reachedReview
-    ? t.form.backToReview
-    : step === "audio" && files.length === 0
-      ? t.form.skipAudio
-      : t.form.next;
-  const filledRefs = rows.map((row) => row.value.trim()).filter(Boolean);
   const editingPublished = mode === "edit" && initial.published;
 
   return (
     <div>
-      {/* En-tête du parcours : retour, quitter, progression */}
-      <div className="flex min-h-11 items-center justify-between gap-2">
-        <Button variant="ghost" onClick={handleBack} className="-ml-4">
+      {/* En-tête : quitter, titre */}
+      <div className="flex min-h-11 items-center">
+        <Button variant="ghost" onClick={requestExit} className="-ml-4">
           <ArrowLeft aria-hidden="true" className="size-5" strokeWidth={1.75} />
-          {atStart ? t.form.quit : t.form.previous}
+          {t.form.quit}
         </Button>
-        {!atStart && (
-          <Button variant="ghost" onClick={requestExit} className="-mr-4">
-            <X aria-hidden="true" className="size-5" strokeWidth={1.75} />
-            {t.form.quit}
-          </Button>
-        )}
       </div>
 
-      <div className="mt-3">
-        <h1 className="text-sm font-medium text-ink-muted">
-          {mode === "create" ? t.form.newTitle : t.form.editTitle}
-          <span aria-hidden="true"> · </span>
-          {t.form.stepOf(stepIndex + 1, STEPS.length)}
-        </h1>
-        <div aria-hidden="true" className="mt-2 grid grid-cols-4 gap-1.5">
-          {STEPS.map((name, index) => (
-            <span key={name} className={cn("h-1.5 rounded-full", index <= stepIndex ? "bg-forest-700" : "bg-line")} />
-          ))}
+      <h1 className="mt-3 font-display text-[1.9rem] leading-tight text-ink sm:text-4xl">
+        {mode === "create" ? t.form.newTitle : t.form.editTitle}
+      </h1>
+      {editingPublished && <p className="mt-1.5 text-[15px] text-ink-muted">{t.form.currentlyPublished}</p>}
+
+      {submitError && (
+        <div ref={errorRef} tabIndex={-1} className="mt-6 focus:outline-none">
+          <Alert tone="error" role="alert" title={t.form.saveErrors.title}>
+            {t.form.saveErrors[submitError]}
+          </Alert>
         </div>
-        <h2
-          ref={headingRef}
-          tabIndex={-1}
-          className="mt-5 font-display text-[1.9rem] leading-tight text-ink focus:outline-none sm:text-4xl"
-        >
-          {t.form.steps[step]}
-        </h2>
-        <p className="mt-1.5 text-[15px] leading-relaxed text-ink-muted">{t.form.stepHints[step]}</p>
-      </div>
+      )}
 
-      <div className="mt-6">
-        {step === "details" && (
+      <div className="mt-6 space-y-4">
+        <FormSection title={t.form.steps.details} hint={t.form.stepHints.details}>
           <div className="space-y-6">
             <div>
               <Label htmlFor={fieldIds.title}>{t.form.title}</Label>
@@ -447,9 +368,9 @@ export function SermonForm({
               <FieldError id={`${fieldIds.date}-error`}>{errors.date && t.form.errors[errors.date]}</FieldError>
             </div>
           </div>
-        )}
+        </FormSection>
 
-        {step === "references" && (
+        <FormSection title={t.form.steps.references} hint={t.form.stepHints.references}>
           <div className="space-y-8">
             <ScriptureReferencesField
               idPrefix={fieldIds.references}
@@ -473,9 +394,9 @@ export function SermonForm({
               />
             </div>
           </div>
-        )}
+        </FormSection>
 
-        {step === "audio" && (
+        <FormSection title={t.form.steps.audio} hint={t.form.stepHints.audio}>
           <div id={fieldIds.audio} tabIndex={-1} className="focus:outline-none">
             <AudioFilesField files={files} setFiles={setFiles} onRecorderStatusChange={handleRecorderStatus} />
             {errors.recording && (
@@ -484,130 +405,59 @@ export function SermonForm({
               </Alert>
             )}
           </div>
-        )}
+        </FormSection>
 
-        {step === "review" && (
-          <div className="space-y-3">
-            {submitError && (
-              <div ref={errorRef} tabIndex={-1} className="focus:outline-none">
-                <Alert tone="error" role="alert" title={t.form.saveErrors.title}>
-                  {t.form.saveErrors[submitError]}
-                </Alert>
-              </div>
-            )}
-
-            <ReviewBlock title={t.form.steps.details} editLabel={t.form.edit} onEdit={() => goTo(0)}>
-              <p className="font-display text-[1.4rem] leading-snug text-ink">{title.trim()}</p>
-              {isValidIsoDate(date) && <p className="mt-1 text-[15px] text-ink-soft">{formatDate(date, locale)}</p>}
-            </ReviewBlock>
-
-            <ReviewBlock title={t.form.steps.references} editLabel={t.form.edit} onEdit={() => goTo(1)}>
-              <ul className="flex flex-wrap gap-2 pt-1">
-                {filledRefs.map((reference) => (
-                  <li
-                    key={reference}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-sand-100 px-3 py-1.5 text-[15px] text-ink"
-                  >
-                    <BookOpen aria-hidden="true" className="size-4 text-gold-700" strokeWidth={1.75} />
-                    {reference}
-                  </li>
-                ))}
-              </ul>
-              {notes.trim() && (
-                <p className="mt-3 line-clamp-4 text-[15px] leading-relaxed whitespace-pre-line text-ink-soft">
-                  {notes.trim()}
-                </p>
-              )}
-            </ReviewBlock>
-
-            <ReviewBlock title={t.form.steps.audio} editLabel={t.form.edit} onEdit={() => goTo(2)}>
-              {files.length === 0 ? (
-                <p className="flex items-start gap-2 text-[15px] text-gold-700">
-                  <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
-                  {t.form.reviewNoAudio}
-                </p>
-              ) : (
-                <ul className="space-y-1.5 pt-1">
-                  {files.map((file) => (
-                    <li key={file.id} className="flex items-center gap-2.5 text-[15px] text-ink">
-                      <Mic aria-hidden="true" className="size-4 shrink-0 text-forest-700" strokeWidth={1.75} />
-                      <span className="min-w-0 flex-1 truncate">{file.name.trim() || file.format.toUpperCase()}</span>
-                      {file.duration !== null && (
-                        <span className="shrink-0 text-sm text-ink-muted tabular-nums">
-                          {formatClock(file.duration)}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </ReviewBlock>
-
-            <fieldset className="rounded-3xl bg-surface p-5 ring-1 ring-line">
-              <legend className="float-left text-sm font-medium text-ink-muted">{t.form.language}</legend>
-              <div className="clear-left grid grid-cols-2 gap-2 pt-3">
-                {(["fr", "en"] as const).map((code) => (
-                  <label
-                    key={code}
-                    className={cn(
-                      "flex h-12 cursor-pointer items-center justify-center rounded-xl border text-[15px] font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-forest-500",
-                      language === code
-                        ? "border-forest-700 bg-forest-700 text-paper"
-                        : "border-line-strong bg-surface text-ink hover:bg-paper",
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name={`${id}-language`}
-                      value={code}
-                      checked={language === code}
-                      onChange={() => setLanguage(code)}
-                      className="sr-only"
-                    />
-                    {t.form.languages[code]}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {editingPublished && <p className="px-1 text-sm text-ink-muted">{t.form.currentlyPublished}</p>}
+        <fieldset className="rounded-3xl bg-surface p-5 ring-1 ring-line sm:p-6">
+          <legend className="float-left font-display text-[1.5rem] leading-tight text-ink sm:text-[1.75rem]">
+            {t.form.language}
+          </legend>
+          <div className="clear-left grid grid-cols-2 gap-2 pt-4">
+            {(["fr", "en"] as const).map((code) => (
+              <label
+                key={code}
+                className={cn(
+                  "flex h-12 cursor-pointer items-center justify-center rounded-xl border text-[15px] font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-forest-500",
+                  language === code
+                    ? "border-forest-700 bg-forest-700 text-paper"
+                    : "border-line-strong bg-surface text-ink hover:bg-paper",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`${id}-language`}
+                  value={code}
+                  checked={language === code}
+                  onChange={() => setLanguage(code)}
+                  className="sr-only"
+                />
+                {t.form.languages[code]}
+              </label>
+            ))}
           </div>
-        )}
+        </fieldset>
       </div>
 
       {/* Actions principales, à portée du pouce */}
       <div className="sticky bottom-0 z-20 -mx-4 mt-8 border-t border-line bg-paper/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:mx-0 sm:px-0">
-        {step === "review" ? (
-          <>
-            <div className="flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
-              <Button size="xl" onClick={() => submit(true)} disabled={submitting} className="w-full sm:w-auto">
-                {busy && <LoaderCircle aria-hidden="true" className="size-5 animate-spin" strokeWidth={2} />}
-                {editingPublished ? t.form.saveChanges : t.form.publish}
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                onClick={() => submit(false)}
-                disabled={submitting}
-                className="w-full sm:h-14 sm:w-auto"
-              >
-                {editingPublished ? t.form.unpublish : t.form.saveDraft}
-              </Button>
-            </div>
-            <p className="mt-2 text-center text-[13px] text-ink-muted sm:text-left">{t.form.publishHelp}</p>
-          </>
-        ) : (
-          <Button
-            size="xl"
-            onClick={() => leaveStep(reachedReview ? REVIEW : stepIndex + 1)}
-            className="w-full sm:w-auto sm:min-w-56"
-          >
-            {continueLabel}
+        <div className="flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
+          <Button size="xl" onClick={() => submit(true)} disabled={submitting} className="w-full sm:w-auto">
+            {busy && <LoaderCircle aria-hidden="true" className="size-5 animate-spin" strokeWidth={2} />}
+            {editingPublished ? t.form.saveChanges : t.form.publish}
           </Button>
-        )}
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={() => submit(false)}
+            disabled={submitting}
+            className="w-full sm:h-14 sm:w-auto"
+          >
+            {editingPublished ? t.form.unpublish : t.form.saveDraft}
+          </Button>
+        </div>
+        <p className="mt-2 text-center text-[13px] text-ink-muted sm:text-left">{t.form.publishHelp}</p>
       </div>
 
-      {step === "review" && reviewFooter}
+      {reviewFooter}
 
       <ConfirmDialog
         open={confirmExit}

@@ -20,13 +20,13 @@ export const fr = {
     switchTo: (lang: string) => `Passer en ${lang}`,
   },
   footer: {
-    description: "Les prédications de l'église, à écouter et réécouter.",
+    description: "Les prédications de l'assemblée des bien-aimés, à écouter et réécouter.",
     links: "Liens",
     copyright: (year: number) => `© ${year} Bien-aimés. Tous droits réservés.`,
   },
   home: {
     title: "Écoutez la Parole, où que vous soyez.",
-    subtitle: "Toutes les prédications de l'église, à écouter et réécouter.",
+    subtitle: "Toutes les prédications de l'assemblée des bien-aimés, à écouter et réécouter.",
     listenCta: "Écouter une prédication",
     searchLabel: "Rechercher une prédication",
     searchPlaceholder: "Thème, livre, verset…",
@@ -293,7 +293,7 @@ export const fr = {
       notConfigured: "L'enregistrement n'est pas encore activé sur ce site.",
       unauthorized: "Votre session a expiré. Reconnectez-vous, puis réessayez.",
       forbidden: "Votre rôle ne permet pas cette action.",
-      invalid: "Certaines informations sont invalides. Vérifiez chaque étape.",
+      invalid: "Certaines informations sont invalides. Vérifiez les champs du formulaire.",
       notFound: "Cette prédication n'existe plus.",
       server: "Un problème est survenu. Réessayez dans un instant.",
       upload: "L'envoi de l'audio a échoué. Vérifiez votre connexion internet, puis réessayez. Rien n'a été modifié.",
@@ -378,6 +378,11 @@ export const fr = {
     title: "Page introuvable",
     text: "La page demandée n'existe pas ou a été déplacée.",
     home: "Retour à l'accueil",
+  },
+  offline: {
+    title: "Vous êtes hors ligne",
+    text: "Cette page n'est pas disponible sans connexion. Les pages déjà consultées restent accessibles. Vérifiez votre connexion, puis réessayez.",
+    retry: "Réessayer",
   },
 };
 

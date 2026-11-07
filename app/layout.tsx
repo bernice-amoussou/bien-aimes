@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Newsreader } from "next/font/google";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import "./globals.css";
 
@@ -22,6 +23,20 @@ export const metadata: Metadata = {
   description:
     "Les prédications de l'église, archivées pour être écoutées, retrouvées et partagées.",
   applicationName: "Bien-aimés",
+  // Application installée (PWA) : le manifeste est servi par app/manifest.ts.
+  appleWebApp: {
+    capable: true,
+    title: "Bien-aimés",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -43,6 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         <LocaleProvider>{children}</LocaleProvider>
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );

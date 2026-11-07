@@ -293,7 +293,7 @@ export const en: Dictionary = {
       notConfigured: "Saving isn't enabled on this site yet.",
       unauthorized: "Your session has expired. Sign in again, then try again.",
       forbidden: "Your role doesn't allow this action.",
-      invalid: "Some information is invalid. Check each step.",
+      invalid: "Some information is invalid. Check the form fields.",
       notFound: "This sermon no longer exists.",
       server: "Something went wrong. Try again in a moment.",
       upload: "The audio upload failed. Check your internet connection, then try again. Nothing was changed.",
@@ -378,5 +378,10 @@ export const en: Dictionary = {
     title: "Page not found",
     text: "The page you're looking for doesn't exist or has moved.",
     home: "Back to home",
+  },
+  offline: {
+    title: "You're offline",
+    text: "This page isn't available without a connection. Pages you've already visited are still available. Check your connection, then try again.",
+    retry: "Try again",
   },
 };
