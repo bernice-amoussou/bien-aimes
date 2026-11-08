@@ -1,4 +1,5 @@
 import "server-only";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cache } from "react";
 import type { TeamRole } from "@/lib/supabase/database.types";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -26,7 +27,13 @@ export type AdminAccess =
  */
 export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   const supabase = await createServerSupabase();
-  const { data, error } = await supabase.auth.getUser();
+  let { data, error } = await supabase.auth.getUser();
+  // Erreur réseau passagère : on réessaie une fois au lieu de déconnecter l'utilisateur.
+  if (error && isAuthRetryableFetchError(error)) ({ data, error } = await supabase.auth.getUser());
+  if (error && isAuthRetryableFetchError(error)) {
+    // Session probablement valide mais invérifiable : erreur affichée, cookies conservés.
+    throw new Error("Supabase Auth est momentanément injoignable.");
+  }
   if (error || !data.user) return { status: "signed-out" };
 
   const user: CurrentUser = { id: data.user.id, email: data.user.email ?? null };
