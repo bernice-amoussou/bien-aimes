@@ -2,6 +2,7 @@
  * Utilitaires d'enregistrement audio — API MediaRecorder / getUserMedia.
  * Les codecs disponibles varient selon les navigateurs (Chrome/Firefox : WebM/Opus,
  * Safari : MP4/AAC), on interroge donc `MediaRecorder.isTypeSupported`.
+ * Seuls des conteneurs acceptés à l'envoi (WebM, OGG, M4A) sont demandés.
  */
 
 const PREFERRED_MIME_TYPES = [
@@ -10,7 +11,6 @@ const PREFERRED_MIME_TYPES = [
   "audio/ogg;codecs=opus",
   "audio/mp4;codecs=mp4a.40.2",
   "audio/mp4",
-  "audio/aac",
 ];
 
 export type RecorderErrorCode =

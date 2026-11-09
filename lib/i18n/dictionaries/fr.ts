@@ -298,6 +298,11 @@ export const fr = {
       server: "Un problème est survenu. Réessayez dans un instant.",
       upload: "L'envoi de l'audio a échoué. Vérifiez votre connexion internet, puis réessayez. Rien n'a été modifié.",
       uploadTooLarge: "Un fichier audio est trop volumineux. Rien n'a été modifié.",
+      tooLarge: "Un fichier audio est trop volumineux. Rien n'a été modifié.",
+      invalidAudio:
+        "Un fichier n'est pas un audio valide (formats acceptés : MP3, WAV, M4A, AAC, OGG, WebM). Rien n'a été modifié.",
+      storageNotConfigured: "L'envoi d'audios n'est pas encore activé sur ce site. Rien n'a été modifié.",
+      offline: "Vous semblez hors ligne. Reconnectez-vous à internet, puis réessayez. Rien n'a été modifié.",
     },
     errors: {
       dateRequired: "Indiquez la date de la prédication.",
@@ -313,9 +318,10 @@ export const fr = {
     record: "Enregistrer avec le micro",
     recordHint: "Directement depuis cet appareil",
     choose: "Choisir un fichier audio",
-    chooseHint: (mb: number) => `MP3, M4A, WAV… jusqu'à ${mb} Mo`,
+    chooseHint: (mb: number) => `MP3, M4A, AAC, WAV, OGG, WebM · jusqu'à ${mb} Mo`,
     dropHint: "Vous pouvez aussi glisser-déposer vos fichiers ici.",
-    invalidType: (name: string) => `« ${name} » n'est pas un fichier audio.`,
+    invalidType: (name: string) =>
+      `« ${name} » n'est pas accepté. Formats possibles : MP3, WAV, M4A, AAC, OGG ou WebM.`,
     tooLarge: (name: string, mb: number) => `« ${name} » est trop volumineux (${mb} Mo maximum).`,
     listTitle: (n: number) => `${n} ${plural(n, "fichier audio", "fichiers audio")}`,
     rename: (name: string) => `Nom de l'audio « ${name} »`,

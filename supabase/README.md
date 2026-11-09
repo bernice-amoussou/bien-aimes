@@ -28,7 +28,7 @@ Le script crée :
 | `audio_files` | fichiers audio liés à une prédication (plusieurs par prédication) |
 | `team_members` | membres de l'équipe et leur rôle (`admin` ou `member`) |
 | `save_sermon()` | enregistrement d'une prédication et de ses fichiers en une seule transaction |
-| bucket `sermon-audio` | stockage des fichiers audio |
+| bucket `sermon-audio` | **ancien** stockage audio, lu jusqu'à la fin de la migration vers Cloudflare R2 |
 | règles RLS | voir le tableau des droits ci-dessous |
 
 Le script est ré-exécutable : vous pouvez le relancer sans perdre de données.
@@ -68,9 +68,9 @@ on conflict (user_id) do nothing;
 
 ## 5. Taille maximale des fichiers audio
 
-**Storage › Settings › Upload file size limit** : 50 Mo sur l'offre gratuite (un MP3 d'une heure
-à 96 kbit/s fait environ 43 Mo). Sur une offre payante, vous pouvez l'augmenter ; reportez alors la
-même valeur dans `NEXT_PUBLIC_AUDIO_MAX_MB` (étape 6).
+Les fichiers audio sont désormais stockés sur **Cloudflare R2** (voir le [README principal](../README.md)).
+La limite par fichier est `NEXT_PUBLIC_AUDIO_MAX_MB` (50 Mo par défaut, vérifiée aussi par le serveur ;
+un MP3 d'une heure à 96 kbit/s fait environ 43 Mo). Elle ne dépend plus de Supabase Storage.
 
 ## 6. Renseigner les variables d'environnement
 
@@ -113,9 +113,9 @@ NEXT_PUBLIC_AUDIO_MAX_MB=50
 | Supprimer une prédication | – | – | – | ✓ |
 | Voir toute l'équipe, gérer les rôles (SQL) | – | – | – | ✓ |
 
-Les fichiers audio sont servis par des URL publiques (bucket public en lecture) : c'est ce qui permet
-au lecteur et au téléchargement de fonctionner sans connexion. Les chemins contiennent des identifiants
-aléatoires ; un fichier rattaché à un brouillon n'est référencé nulle part sur le site public.
+Les fichiers audio sont lus via `/api/audio/<id>` : le serveur vérifie que la prédication est publiée
+(ou que l'utilisateur fait partie de l'équipe), puis redirige vers une URL Cloudflare R2 signée à durée
+limitée. Les anciens fichiers pas encore migrés sont lus depuis le bucket Supabase public `sermon-audio`.
 
 ## Mise en ligne (Vercel ou autre hébergeur)
 

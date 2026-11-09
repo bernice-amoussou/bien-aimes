@@ -11,7 +11,8 @@ export function SiteFooter() {
 
   const links = [
     { href: "/predications", label: t.nav.sermons },
-    { href: "/a-propos", label: t.nav.about },
+    // Section « À propos » désactivée (décommenter pour la rétablir) :
+    // { href: "/a-propos", label: t.nav.about },
     { href: "/connexion", label: t.nav.login },
   ];
 

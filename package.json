@@ -7,9 +7,17 @@
     "dev:https": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "audio:status": "node --env-file-if-exists=.env.local scripts/audio-storage.mjs status",
+    "audio:migrate": "node --env-file-if-exists=.env.local scripts/audio-storage.mjs migrate",
+    "audio:verify": "node --env-file-if-exists=.env.local scripts/audio-storage.mjs verify",
+    "audio:orphans": "node --env-file-if-exists=.env.local scripts/audio-storage.mjs orphans"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
+    "@aws-sdk/s3-request-presigner": "^3.1164.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.61.0",
@@ -20,12 +28,13 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   }
 }

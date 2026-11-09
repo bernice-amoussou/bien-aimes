@@ -1,6 +1,7 @@
 "use client";
 
-import { Headphones, House, Info, LockKeyhole, Search } from "lucide-react";
+// « Info » sert à l'onglet « À propos », désactivé : le réimporter pour le rétablir.
+import { Headphones, House, LockKeyhole, Search } from "lucide-react";
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/cn";
@@ -48,7 +49,8 @@ export function SiteHeader() {
   const links = [
     { href: "/", label: t.nav.home },
     { href: "/predications", label: t.nav.sermons },
-    { href: "/a-propos", label: t.nav.about },
+    // Section « À propos » désactivée (décommenter pour la rétablir) :
+    // { href: "/a-propos", label: t.nav.about },
   ];
 
   return (
@@ -108,7 +110,8 @@ export function SiteTabBar() {
         }
       },
     },
-    { href: "/a-propos", label: t.nav.about, icon: Info, isActive: (p) => p.startsWith("/a-propos") },
+    // Section « À propos » désactivée (décommenter, et réimporter Info, pour la rétablir) :
+    // { href: "/a-propos", label: t.nav.about, icon: Info, isActive: (p) => p.startsWith("/a-propos") },
   ];
 
   return <TabBar items={items} label={t.nav.primary} />;

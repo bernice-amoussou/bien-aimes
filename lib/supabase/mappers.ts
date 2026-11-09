@@ -1,5 +1,4 @@
 import type { AudioFile, Sermon } from "@/types/sermon";
-import { AUDIO_BUCKET, requireSupabaseEnv } from "./config";
 import type { AudioFileRow, SermonRow } from "./database.types";
 
 /** Colonnes demandées à Supabase pour une prédication et ses fichiers. */
@@ -12,33 +11,35 @@ export const SERMON_SELECT = `
   )
 ` as const;
 
-export type SermonWithAudioRow = SermonRow & { audio_files: AudioFileRow[] | null };
+/**
+ * Les pages n'ont pas besoin de savoir où est stocké un fichier : la lecture passe par
+ * /api/audio/<id>. `storage_provider` n'est donc pas demandé ici (le site fonctionne
+ * aussi avant l'exécution de la mise à jour SQL).
+ */
+type ListedAudioRow = Omit<AudioFileRow, "storage_provider">;
 
-function encodeStoragePath(path: string) {
-  return path.split("/").map(encodeURIComponent).join("/");
+export type SermonWithAudioRow = SermonRow & { audio_files: ListedAudioRow[] | null };
+
+/**
+ * URL de lecture d'un fichier audio. Elle passe toujours par le site
+ * (app/api/audio/[id]/route.ts) : le serveur vérifie que la prédication est publiée,
+ * ou que le visiteur fait partie de l'équipe, avant de rediriger vers le fichier.
+ * Le navigateur ne connaît donc ni R2 ni Supabase Storage.
+ */
+export function audioPlaybackUrl(audioId: string): string {
+  return `/api/audio/${audioId}`;
 }
 
-/** URL publique stable d'un objet du bucket audio (bucket public en lecture). */
-export function publicAudioUrl(storagePath: string): string {
-  const { url } = requireSupabaseEnv();
-  return `${url}/storage/v1/object/public/${AUDIO_BUCKET}/${encodeStoragePath(storagePath)}`;
+export function audioDownloadUrl(audioId: string): string {
+  return `/api/audio/${audioId}?download=1`;
 }
 
-function safeFileName(name: string, format: string) {
-  const base = name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "predication";
-  return `${base}.${format}`;
-}
-
-export function mapAudioRow(row: AudioFileRow): AudioFile {
-  const url = publicAudioUrl(row.storage_path);
+export function mapAudioRow(row: ListedAudioRow): AudioFile {
   return {
     id: row.id,
     name: row.name,
-    url,
-    // Supabase ajoute Content-Disposition: attachment avec ce paramètre.
-    downloadUrl: row.is_downloadable
-      ? `${url}?download=${encodeURIComponent(safeFileName(row.name, row.format))}`
-      : null,
+    url: audioPlaybackUrl(row.id),
+    downloadUrl: row.is_downloadable ? audioDownloadUrl(row.id) : null,
     storagePath: row.storage_path,
     duration: row.duration_seconds === null ? null : Number(row.duration_seconds),
     format: row.format,

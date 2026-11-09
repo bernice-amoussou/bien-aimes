@@ -47,6 +47,30 @@ create table if not exists public.audio_files (
   created_at       timestamptz not null default now()
 );
 
+-- ─── Stockage audio : Cloudflare R2 (nouveaux fichiers) ou ancien bucket Supabase ──
+-- Les lignes déjà présentes avant le passage à R2 sont marquées « supabase » ;
+-- le script de migration (scripts/audio-storage.mjs) les copie vers R2 puis les
+-- passe à « r2 ». Les nouveaux fichiers sont toujours enregistrés sur R2.
+alter table public.audio_files
+  add column if not exists storage_provider text not null default 'supabase';
+alter table public.audio_files alter column storage_provider set default 'r2';
+
+do $$ begin
+  alter table public.audio_files
+    add constraint audio_files_storage_provider_check
+    check (storage_provider in ('r2', 'supabase'));
+exception when duplicate_object then null; end $$;
+
+-- Clé de stockage toujours rangée dans le dossier de SA prédication, sans « .. » ni
+-- chemin arbitraire. NOT VALID : contrôle les nouvelles lignes sans bloquer
+-- l'exécution du script si d'anciennes lignes ne respectaient pas ce format.
+do $$ begin
+  alter table public.audio_files
+    add constraint audio_files_storage_path_format
+    check (storage_path ~ ('^sermons/' || sermon_id::text || '/[A-Za-z0-9_-]{1,64}\.[a-z0-9]{1,8}$'))
+    not valid;
+exception when duplicate_object then null; end $$;
+
 -- Le champ « prédicateur » a été retiré : supprime la colonne si la table
 -- avait été créée par une version précédente de ce script.
 alter table public.sermons drop column if exists preacher;
@@ -117,6 +141,12 @@ grant select on public.sermons, public.audio_files to anon, authenticated;
 grant insert, update, delete on public.sermons, public.audio_files to authenticated;
 grant select, insert, update, delete on public.team_members to authenticated;
 revoke all on public.team_members from anon;
+
+-- Fichiers audio : l'équipe ne peut modifier que le nom, le téléchargement et l'ordre.
+-- La clé de stockage, son emplacement et la prédication liée ne changent jamais
+-- après l'insertion (un remplacement crée un nouveau fichier).
+revoke update on public.audio_files from authenticated;
+grant update (name, is_downloadable, position) on public.audio_files to authenticated;
 
 
 -- ─── 6. Règles RLS ─────────────────────────────────────────────────────────
@@ -202,8 +232,8 @@ create policy "team_members_delete_admin" on public.team_members
 -- ─── 7. Enregistrement transactionnel d'une prédication ───────────────────
 -- Crée ou met à jour une prédication ET synchronise ses fichiers audio dans
 -- une seule transaction. SECURITY INVOKER : les règles RLS de l'appelant
--- s'appliquent normalement. Renvoie les chemins Storage des fichiers retirés,
--- que l'application supprime ensuite du bucket.
+-- s'appliquent normalement. Renvoie les fichiers retirés (clé + emplacement),
+-- que l'application supprime ensuite du stockage.
 --
 -- p_sermon : { id, preached_on, title, scripture_references[], notes,
 --              language, is_published }
@@ -220,6 +250,7 @@ declare
   v_id      uuid := (p_sermon ->> 'id')::uuid;
   v_refs    text[];
   v_removed text[];
+  v_removed_files jsonb;
 begin
   if not public.is_team_member() then
     raise exception 'not_team_member' using errcode = '42501';
@@ -229,11 +260,15 @@ begin
     raise exception 'invalid_audio_payload' using errcode = '22023';
   end if;
 
-  -- Les nouveaux fichiers doivent être rangés dans le dossier de la prédication.
+  -- Nouveaux fichiers : clé générée par le serveur dans le dossier de la prédication,
+  -- et dans un format accepté uniquement.
   if exists (
     select 1 from jsonb_array_elements(p_audio) a
     where a ->> 'id' is null
-      and (a ->> 'storage_path') not like 'sermons/' || v_id::text || '/%'
+      and coalesce(a ->> 'storage_path', '') !~ (
+        '^sermons/' || v_id::text
+        || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(mp3|wav|m4a|aac|ogg|webm)$'
+      )
   ) then
     raise exception 'invalid_storage_path' using errcode = '22023';
   end if;
@@ -269,9 +304,14 @@ begin
         select (a ->> 'id')::uuid from jsonb_array_elements(p_audio) a
         where a ->> 'id' is not null
       )
-    returning f.storage_path
+    returning f.storage_path, f.storage_provider
   )
-  select coalesce(array_agg(storage_path), '{}') into v_removed from removed;
+  select
+    coalesce(array_agg(storage_path), '{}'),
+    coalesce(jsonb_agg(jsonb_build_object('storage_path', storage_path,
+                                          'storage_provider', storage_provider)), '[]'::jsonb)
+    into v_removed, v_removed_files
+    from removed;
 
   -- Fichiers conservés : nom, téléchargement et ordre.
   update public.audio_files f set
@@ -283,14 +323,15 @@ begin
     and f.id = (a.value ->> 'id')::uuid
     and f.sermon_id = v_id;
 
-  -- Nouveaux fichiers (déjà téléversés dans Storage par le navigateur).
+  -- Nouveaux fichiers (déjà envoyés vers R2 par le navigateur, vérifiés par le serveur).
   insert into public.audio_files
-    (sermon_id, name, storage_path, duration_seconds, format, mime_type,
+    (sermon_id, name, storage_path, storage_provider, duration_seconds, format, mime_type,
      size_bytes, is_downloadable, position)
   select
     v_id,
     btrim(a.value ->> 'name'),
     a.value ->> 'storage_path',
+    'r2',
     (a.value ->> 'duration_seconds')::numeric,
     a.value ->> 'format',
     nullif(a.value ->> 'mime_type', ''),
@@ -300,7 +341,11 @@ begin
   from jsonb_array_elements(p_audio) with ordinality as a(value, ordinality)
   where a.value ->> 'id' is null;
 
-  return jsonb_build_object('id', v_id, 'removed_paths', to_jsonb(v_removed));
+  return jsonb_build_object(
+    'id', v_id,
+    'removed_paths', to_jsonb(v_removed),
+    'removed_files', v_removed_files
+  );
 end;
 $$;
 
@@ -308,7 +353,41 @@ revoke all on function public.save_sermon(jsonb, jsonb) from public, anon;
 grant execute on function public.save_sermon(jsonb, jsonb) to authenticated;
 
 
--- ─── 8. Stockage des fichiers audio ────────────────────────────────────────
+-- ─── 7 bis. Migration vers Cloudflare R2 ───────────────────────────────────
+-- Utilisée par scripts/audio-storage.mjs APRÈS avoir copié et vérifié le fichier
+-- sur R2. Réservée aux administrateurs. Ne touche à rien d'autre que
+-- l'emplacement : identifiants, prédication liée et clé restent identiques.
+-- Renvoie true si la ligne a été basculée, false si elle l'était déjà.
+
+create or replace function public.mark_audio_migrated(p_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  if not public.is_admin() then
+    raise exception 'not_admin' using errcode = '42501';
+  end if;
+
+  update public.audio_files
+     set storage_provider = 'r2'
+   where id = p_id and storage_provider = 'supabase';
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end;
+$$;
+
+revoke all on function public.mark_audio_migrated(uuid) from public, anon;
+grant execute on function public.mark_audio_migrated(uuid) to authenticated;
+
+
+-- ─── 8. ANCIEN stockage des fichiers audio (Supabase Storage) ──────────────
+-- Les nouveaux fichiers sont envoyés vers Cloudflare R2 (voir README).
+-- Ce bucket est conservé, en l'état, jusqu'à la validation de la migration :
+-- les fichiers pas encore migrés y sont toujours lus.
 -- Bucket public en lecture : les lecteurs audio du site utilisent des URL
 -- publiques stables. Les chemins contiennent des UUID non devinables.
 -- L'écriture (ajout, remplacement, suppression) est réservée à l'équipe.

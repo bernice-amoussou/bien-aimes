@@ -6,6 +6,8 @@
 
 export type TeamRole = "admin" | "member";
 export type SermonLanguageEnum = "fr" | "en";
+/** Emplacement d'un fichier audio : Cloudflare R2, ou ancien bucket Supabase (migration). */
+export type StorageProvider = "r2" | "supabase";
 
 export type SermonRow = {
   id: string;
@@ -25,6 +27,7 @@ export type AudioFileRow = {
   sermon_id: string;
   name: string;
   storage_path: string;
+  storage_provider: StorageProvider;
   duration_seconds: number | null;
   format: string;
   mime_type: string | null;
@@ -82,7 +85,14 @@ export interface Database {
         Row: AudioFileRow;
         Insert: Insert<
           AudioFileRow,
-          "id" | "duration_seconds" | "mime_type" | "size_bytes" | "is_downloadable" | "position" | "created_at"
+          | "id"
+          | "storage_provider"
+          | "duration_seconds"
+          | "mime_type"
+          | "size_bytes"
+          | "is_downloadable"
+          | "position"
+          | "created_at"
         >;
         Update: Partial<AudioFileRow>;
         Relationships: [
@@ -108,8 +118,13 @@ export interface Database {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       save_sermon: {
         Args: { p_sermon: SaveSermonPayload; p_audio: SaveAudioPayload[] };
-        Returns: { id: string; removed_paths: string[] };
+        Returns: {
+          id: string;
+          removed_paths: string[];
+          removed_files: { storage_path: string; storage_provider: StorageProvider }[];
+        };
       };
+      mark_audio_migrated: { Args: { p_id: string }; Returns: boolean };
     };
     Enums: {
       team_role: TeamRole;
